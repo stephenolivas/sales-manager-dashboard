@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rep Metrics Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #f4f5f7;
+            --surface: #ffffff;
+            --text: #1a1d23;
+            --text-secondary: #5f6577;
+            --text-muted: #9ca0ad;
+            --border: #e5e7ec;
+            --accent: #2563eb;
+            --accent-light: #eff4ff;
+            --green: #16a34a;
+            --green-bg: #f0fdf4;
+            --amber: #d97706;
+            --amber-bg: #fffbeb;
+            --red: #dc2626;
+            --red-bg: #fef2f2;
+            --teal: #0d9488;
+            --teal-bg: #f0fdfa;
+            --purple: #7c3aed;
+            --purple-bg: #f5f3ff;
+            --radius: 12px;
+            --shadow: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* ── Header ────────────────────────────────────────── */
+
+        .header {
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            padding: 20px 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .header-icon {
+            width: 38px;
+            height: 38px;
+            background: var(--accent);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .header-icon svg {
+            width: 20px;
+            height: 20px;
+            fill: white;
+        }
+
+        .header h1 {
+            font-size: 20px;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+        }
+
+        .header h1 span {
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            color: var(--text-secondary);
+            font-size: 13px;
+        }
+
+        .live-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--green);
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 6px;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        .month-badge {
+            background: var(--accent-light);
+            color: var(--accent);
+            padding: 5px 14px;
+            border-radius: 20px;
+            font-weight: 700;
+            font-size: 13px;
+        }
+
+        /* ── Content ───────────────────────────────────────── */
+
+        .content {
+            max-width: 1440px;
+            margin: 0 auto;
+            padding: 24px 32px;
+        }
+
+        /* ── KPI Row ───────────────────────────────────────── */
+
+        .kpi-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 14px;
+            margin-bottom: 24px;
+        }
+
+        .kpi-card {
+            background: var(--surface);
+            border-radius: var(--radius);
+            padding: 18px 20px;
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .kpi-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+        }
+
+        .kpi-card.blue::before { background: var(--accent); }
+        .kpi-card.green::before { background: var(--green); }
+        .kpi-card.amber::before { background: var(--amber); }
+        .kpi-card.red::before { background: var(--red); }
+        .kpi-card.teal::before { background: var(--teal); }
+        .kpi-card.purple::before { background: var(--purple); }
+
+        .kpi-label {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+        }
+
+        .kpi-value {
+            font-size: 26px;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            line-height: 1.1;
+        }
+
+        .kpi-sub {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        /* ── Table Section ─────────────────────────────────── */
+
+        .table-section {
+            background: var(--surface);
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow-md);
+            overflow: hidden;
+        }
+
+        .table-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 18px 24px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .table-title {
+            font-size: 15px;
+            font-weight: 700;
+        }
+
+        .table-title span {
+            color: var(--text-muted);
+            font-weight: 400;
+        }
+
+        .section-labels {
+            display: flex;
+            gap: 0;
+            border-bottom: 2px solid var(--border);
+        }
+
+        .section-label {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            padding: 8px 24px;
+            color: var(--text-muted);
+        }
+
+        .section-label:first-child {
+            /* Rep Name column width */
+            min-width: 180px;
+        }
+
+        .section-label.meetings {
+            background: var(--accent-light);
+            color: var(--accent);
+            flex: 1;
+            text-align: center;
+            border-left: 2px solid var(--border);
+        }
+
+        .section-label.rates {
+            background: var(--teal-bg);
+            color: var(--teal);
+            flex: 1;
+            text-align: center;
+            border-left: 2px solid var(--border);
+        }
+
+        .table-wrap {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        thead th {
+            position: sticky;
+            top: 0;
+            background: var(--bg);
+            padding: 10px 16px;
+            text-align: right;
+            font-weight: 600;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            border-bottom: 1px solid var(--border);
+            cursor: pointer;
+            user-select: none;
+            transition: color 0.15s;
+        }
+
+        thead th:hover {
+            color: var(--accent);
+        }
+
+        thead th.active {
+            color: var(--accent);
+        }
+
+        thead th.active::after {
+            content: ' ▼';
+            font-size: 8px;
+        }
+
+        thead th.active.asc::after {
+            content: ' ▲';
+            font-size: 8px;
+        }
+
+        thead th:first-child {
+            text-align: left;
+            min-width: 180px;
+            padding-left: 24px;
+        }
+
+        /* Column group separators */
+        thead th.meetings-start,
+        tbody td.meetings-start {
+            border-left: 2px solid var(--border);
+        }
+
+        thead th.rates-start,
+        tbody td.rates-start {
+            border-left: 2px solid var(--border);
+        }
+
+        tbody tr {
+            transition: background 0.1s;
+        }
+
+        tbody tr:hover {
+            background: #f8f9fb;
+        }
+
+        tbody tr:not(:last-child) td {
+            border-bottom: 1px solid #f0f1f3;
+        }
+
+        tbody td {
+            padding: 12px 16px;
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+
+        tbody td:first-child {
+            text-align: left;
+            padding-left: 24px;
+            font-weight: 600;
+        }
+
+        .manager-tag {
+            font-size: 10px;
+            background: #f0f1f3;
+            color: var(--text-muted);
+            padding: 2px 7px;
+            border-radius: 4px;
+            margin-left: 6px;
+            font-weight: 500;
+        }
+
+        /* Totals row */
+        tbody tr.totals-row {
+            background: var(--bg);
+            font-weight: 700;
+            border-top: 2px solid var(--border);
+        }
+
+        tbody tr.totals-row td {
+            padding: 14px 16px;
+            border-bottom: none;
+        }
+
+        tbody tr.totals-row td:first-child {
+            padding-left: 24px;
+        }
+
+        /* Rate cell coloring */
+        .rate-high { color: var(--green); }
+        .rate-mid { color: var(--teal); }
+        .rate-low { color: var(--amber); }
+        .rate-bad { color: var(--red); }
+        .rate-na { color: var(--text-muted); }
+
+        /* ── Footer ────────────────────────────────────────── */
+
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: var(--text-muted);
+            font-size: 12px;
+        }
+
+        /* ── Loading state ─────────────────────────────────── */
+
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 80px 20px;
+            color: var(--text-muted);
+            font-size: 14px;
+            gap: 10px;
+        }
+
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* ── Responsive ────────────────────────────────────── */
+
+        @media (max-width: 768px) {
+            .header { padding: 16px 20px; }
+            .content { padding: 16px 20px; }
+            .kpi-row { grid-template-columns: repeat(2, 1fr); }
+            thead th:first-child, tbody td:first-child { padding-left: 16px; min-width: 140px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <div class="header-left">
+        <div class="header-icon">
+            <svg viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+        </div>
+        <h1>Rep Metrics <span>Dashboard</span></h1>
+    </div>
+    <div class="header-right">
+        <span class="month-badge" id="monthLabel">—</span>
+        <span><span class="live-dot"></span>Updated <span id="updatedAt">—</span></span>
+    </div>
+</div>
+
+<div class="content">
+
+    <!-- KPI Cards -->
+    <div class="kpi-row" id="kpiRow">
+        <div class="kpi-card blue">
+            <div class="kpi-label">Meetings Booked</div>
+            <div class="kpi-value" id="kpiBooked">—</div>
+            <div class="kpi-sub" id="kpiBookedSub"></div>
+        </div>
+        <div class="kpi-card green">
+            <div class="kpi-label">Shown (Yes)</div>
+            <div class="kpi-value" id="kpiShown">—</div>
+            <div class="kpi-sub" id="kpiShownSub"></div>
+        </div>
+        <div class="kpi-card red">
+            <div class="kpi-label">No-Show (No)</div>
+            <div class="kpi-value" id="kpiNoShow">—</div>
+            <div class="kpi-sub" id="kpiNoShowSub"></div>
+        </div>
+        <div class="kpi-card amber">
+            <div class="kpi-label">No Entry (Blank)</div>
+            <div class="kpi-value" id="kpiNoEntry">—</div>
+            <div class="kpi-sub" id="kpiNoEntrySub"></div>
+        </div>
+        <div class="kpi-card purple">
+            <div class="kpi-label">Qualified (Yes)</div>
+            <div class="kpi-value" id="kpiQualified">—</div>
+            <div class="kpi-sub" id="kpiQualifiedSub"></div>
+        </div>
+        <div class="kpi-card teal">
+            <div class="kpi-label">Team Show Rate</div>
+            <div class="kpi-value" id="kpiShowRate">—</div>
+            <div class="kpi-sub" id="kpiShowRateSub"></div>
+        </div>
+        <div class="kpi-card blue">
+            <div class="kpi-label">Booked → Close %</div>
+            <div class="kpi-value" id="kpiCloseRate">—</div>
+            <div class="kpi-sub" id="kpiCloseRateSub"></div>
+        </div>
+        <div class="kpi-card green">
+            <div class="kpi-label">Shown → Close %</div>
+            <div class="kpi-value" id="kpiShownClose">—</div>
+            <div class="kpi-sub" id="kpiShownCloseSub"></div>
+        </div>
+    </div>
+
+    <!-- Table -->
+    <div class="table-section">
+        <div class="table-header">
+            <div class="table-title">Rep Breakdown <span id="repCount"></span></div>
+            <div style="font-size: 12px; color: var(--text-muted);">Click any column header to sort</div>
+        </div>
+        <div class="section-labels">
+            <div class="section-label" style="min-width:180px;"></div>
+            <div class="section-label meetings">Meeting Funnel</div>
+            <div class="section-label rates">Performance Rates</div>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr id="tableHead">
+                        <th data-key="name" data-dir="asc" data-type="string">Rep Name</th>
+                        <th data-key="booked" data-dir="desc" data-type="num" class="active meetings-start">Booked</th>
+                        <th data-key="shown" data-dir="desc" data-type="num">Shown</th>
+                        <th data-key="no_show" data-dir="desc" data-type="num">No-Show</th>
+                        <th data-key="no_entry" data-dir="desc" data-type="num">No Entry</th>
+                        <th data-key="qualified" data-dir="desc" data-type="num">Qualified</th>
+                        <th data-key="show_rate" data-dir="desc" data-type="num" class="rates-start">Show %</th>
+                        <th data-key="close_rate" data-dir="desc" data-type="num">Booked→Close</th>
+                        <th data-key="shown_to_close_rate" data-dir="desc" data-type="num">Shown→Close</th>
+                        <th data-key="qualified_to_close_rate" data-dir="desc" data-type="num">Qual→Close</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <tr><td colspan="10" class="loading"><div class="spinner"></div> Loading data…</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<div class="footer">
+    Auto-refreshes every 5 minutes &nbsp;·&nbsp; Data from Close CRM
+</div>
+
+<script>
+(function () {
+    'use strict';
+
+    let DATA = null;
+    let currentSort = { key: 'booked', dir: 'desc' };
+
+    // ── Fetch data ──────────────────────────────────────
+
+    async function fetchData() {
+        try {
+            const resp = await fetch('data.json?t=' + Date.now());
+            DATA = await resp.json();
+            render();
+        } catch (e) {
+            console.error('Failed to fetch data.json:', e);
+        }
+    }
+
+    // ── Render ──────────────────────────────────────────
+
+    function render() {
+        if (!DATA) return;
+
+        // Header
+        document.getElementById('monthLabel').textContent = DATA.month_label || '—';
+        document.getElementById('updatedAt').textContent = DATA.updated_at || '—';
+
+        // KPIs
+        setKpi('kpiBooked', DATA.total_booked, `Day ${DATA.day_of_month} of ${DATA.days_in_month}`);
+        setKpi('kpiShown', DATA.total_shown, `${fmtPct(DATA.team_show_rate)} of booked`);
+        setKpi('kpiNoShow', DATA.total_no_show, noShowPct(DATA) + ' of booked');
+        setKpi('kpiNoEntry', DATA.total_no_entry, noEntryPct(DATA) + ' of booked');
+        setKpi('kpiQualified', DATA.total_qualified, qualPct(DATA) + ' of booked');
+        setKpi('kpiShowRate', fmtPct(DATA.team_show_rate), `${DATA.total_shown} / ${DATA.total_booked}`);
+        setKpi('kpiCloseRate', fmtPct(DATA.team_close_rate), `${DATA.total_deals} deals / ${DATA.total_booked} booked`);
+        setKpi('kpiShownClose', fmtPct(DATA.team_shown_to_close_rate), `${DATA.total_deals} deals / ${DATA.total_shown} shown`);
+
+        // Table
+        renderTable();
+    }
+
+    function setKpi(id, value, sub) {
+        document.getElementById(id).textContent = value ?? '—';
+        const subEl = document.getElementById(id + 'Sub');
+        if (subEl) subEl.textContent = sub || '';
+    }
+
+    function noShowPct(d) {
+        return d.total_booked ? fmtPct(round1(d.total_no_show / d.total_booked * 100)) : '—';
+    }
+
+    function noEntryPct(d) {
+        return d.total_booked ? fmtPct(round1(d.total_no_entry / d.total_booked * 100)) : '—';
+    }
+
+    function qualPct(d) {
+        return d.total_booked ? fmtPct(round1(d.total_qualified / d.total_booked * 100)) : '—';
+    }
+
+    function round1(n) { return Math.round(n * 10) / 10; }
+
+    function fmtPct(v) {
+        if (v === null || v === undefined) return '—';
+        return v + '%';
+    }
+
+    function rateClass(v) {
+        if (v === null || v === undefined) return 'rate-na';
+        if (v >= 65) return 'rate-high';
+        if (v >= 45) return 'rate-mid';
+        if (v >= 25) return 'rate-low';
+        return 'rate-bad';
+    }
+
+    // ── Table rendering ─────────────────────────────────
+
+    function renderTable() {
+        const reps = [...DATA.reps];
+        const { key, dir } = currentSort;
+
+        reps.sort((a, b) => {
+            let va = a[key], vb = b[key];
+            // Nulls sort to bottom
+            if (va === null || va === undefined) va = -Infinity;
+            if (vb === null || vb === undefined) vb = -Infinity;
+            if (typeof va === 'string') {
+                return dir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+            }
+            return dir === 'asc' ? va - vb : vb - va;
+        });
+
+        document.getElementById('repCount').textContent = `· ${reps.length} reps`;
+
+        const tbody = document.getElementById('tableBody');
+        let html = '';
+
+        for (const r of reps) {
+            const mgr = r.is_manager ? '<span class="manager-tag">MGR</span>' : '';
+            html += `<tr>
+                <td>${r.name}${mgr}</td>
+                <td class="meetings-start">${r.booked}</td>
+                <td>${r.shown}</td>
+                <td>${r.no_show}</td>
+                <td>${r.no_entry}</td>
+                <td>${r.qualified}</td>
+                <td class="rates-start ${rateClass(r.show_rate)}">${fmtPct(r.show_rate)}</td>
+                <td class="${rateClass(r.close_rate)}">${fmtPct(r.close_rate)}</td>
+                <td class="${rateClass(r.shown_to_close_rate)}">${fmtPct(r.shown_to_close_rate)}</td>
+                <td class="${rateClass(r.qualified_to_close_rate)}">${fmtPct(r.qualified_to_close_rate)}</td>
+            </tr>`;
+        }
+
+        // Totals row
+        html += `<tr class="totals-row">
+            <td>Totals</td>
+            <td class="meetings-start">${DATA.total_booked}</td>
+            <td>${DATA.total_shown}</td>
+            <td>${DATA.total_no_show}</td>
+            <td>${DATA.total_no_entry}</td>
+            <td>${DATA.total_qualified}</td>
+            <td class="rates-start ${rateClass(DATA.team_show_rate)}">${fmtPct(DATA.team_show_rate)}</td>
+            <td class="${rateClass(DATA.team_close_rate)}">${fmtPct(DATA.team_close_rate)}</td>
+            <td class="${rateClass(DATA.team_shown_to_close_rate)}">${fmtPct(DATA.team_shown_to_close_rate)}</td>
+            <td class="${rateClass(DATA.team_qualified_to_close_rate)}">${fmtPct(DATA.team_qualified_to_close_rate)}</td>
+        </tr>`;
+
+        tbody.innerHTML = html;
+    }
+
+    // ── Sorting ─────────────────────────────────────────
+
+    document.getElementById('tableHead').addEventListener('click', (e) => {
+        const th = e.target.closest('th');
+        if (!th || !th.dataset.key) return;
+
+        const key = th.dataset.key;
+        const defaultDir = th.dataset.dir || 'desc';
+
+        if (currentSort.key === key) {
+            currentSort.dir = currentSort.dir === 'desc' ? 'asc' : 'desc';
+        } else {
+            currentSort = { key, dir: defaultDir };
+        }
+
+        // Update header styles
+        document.querySelectorAll('#tableHead th').forEach(h => {
+            h.classList.remove('active', 'asc');
+        });
+        th.classList.add('active');
+        if (currentSort.dir === 'asc') th.classList.add('asc');
+
+        renderTable();
+    });
+
+    // ── Init ────────────────────────────────────────────
+
+    fetchData();
+    setInterval(fetchData, 5 * 60 * 1000); // refresh every 5 min
+
+})();
+</script>
+</body>
+</html>
