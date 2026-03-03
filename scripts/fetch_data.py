@@ -186,24 +186,15 @@ def main():
             today_deals += 1
 
     # ── 2. Fetch Meeting Metrics (leads with First Call Booked this month) ─
-    # Use GET-based query with Close query language
-    excluded_str = ",".join(f'"{s}"' for s in EXCLUDED_STATUSES)
+    # Close search uses display names in quotes for custom fields
     query_str = (
-        f'custom.{CF_FIRST_CALL_BOOKED} >= "{month_start}" '
-        f'custom.{CF_FIRST_CALL_BOOKED} < "{month_end}" '
-        f'lead_status_id not in ({excluded_str})'
+        f'"First Call Booked Date" >= "{month_start}" '
+        f'"First Call Booked Date" < "{month_end}" '
+        f'lead_status_id not in ("{EXCLUDED_STATUSES[0]}", "{EXCLUDED_STATUSES[1]}")'
     )
 
     leads = close_get_all("lead", {
         "query": query_str,
-        "_fields": ",".join([
-            "id",
-            "status_id",
-            f"custom.{CF_FIRST_CALL_BOOKED}",
-            f"custom.{CF_FIRST_CALL_SHOW}",
-            f"custom.{CF_LEAD_OWNER}",
-            f"custom.{CF_QUALIFIED}",
-        ]),
     })
 
     # Tally meeting metrics per rep
@@ -213,16 +204,31 @@ def main():
     rep_no_entry = {}
     rep_qualified = {}
 
+    print(f"   Found {len(leads)} leads with First Call Booked in {month_start} to {month_end}")
+
     for lead in leads:
+        # Close returns custom fields either in lead["custom"] dict
+        # or as top-level keys like lead["custom.cf_XXX"]
         custom = lead.get("custom", {})
-        raw_owner = custom.get(CF_LEAD_OWNER)
+
+        # Try both access patterns for Lead Owner
+        raw_owner = (
+            custom.get(CF_LEAD_OWNER)
+            or lead.get(f"custom.{CF_LEAD_OWNER}")
+        )
         owner = resolve_owner(raw_owner, user_map)
 
         if not owner or owner in EXCLUDED_NAMES:
             continue
 
-        show_up = custom.get(CF_FIRST_CALL_SHOW)
-        qualified = custom.get(CF_QUALIFIED)
+        show_up = (
+            custom.get(CF_FIRST_CALL_SHOW)
+            or lead.get(f"custom.{CF_FIRST_CALL_SHOW}")
+        )
+        qualified = (
+            custom.get(CF_QUALIFIED)
+            or lead.get(f"custom.{CF_QUALIFIED}")
+        )
 
         rep_booked[owner] = rep_booked.get(owner, 0) + 1
 
