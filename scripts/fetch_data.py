@@ -186,82 +186,25 @@ def main():
             today_deals += 1
 
     # ── 2. Fetch Meeting Metrics (leads with First Call Booked this month) ─
-    # Search for leads where First Call Booked Date is in current month
-    search_query = {
-        "query": {
-            "type": "and",
-            "queries": [
-                {
-                    "type": "field_condition",
-                    "field": {
-                        "type": "custom_field",
-                        "custom_field_id": CF_FIRST_CALL_BOOKED,
-                    },
-                    "condition": {
-                        "type": "on_or_after",
-                        "value": month_start,
-                    },
-                },
-                {
-                    "type": "field_condition",
-                    "field": {
-                        "type": "custom_field",
-                        "custom_field_id": CF_FIRST_CALL_BOOKED,
-                    },
-                    "condition": {
-                        "type": "before",
-                        "value": month_end,
-                    },
-                },
-                {
-                    "type": "not",
-                    "query": {
-                        "type": "or",
-                        "queries": [
-                            {
-                                "type": "field_condition",
-                                "field": {"type": "lead_status"},
-                                "condition": {
-                                    "type": "is",
-                                    "value": status_id,
-                                },
-                            }
-                            for status_id in EXCLUDED_STATUSES
-                        ],
-                    },
-                },
-            ],
-        },
-        "_fields": {
-            "lead": [
-                "id",
-                "status_id",
-                f"custom.{CF_FIRST_CALL_BOOKED}",
-                f"custom.{CF_FIRST_CALL_SHOW}",
-                f"custom.{CF_LEAD_OWNER}",
-                f"custom.{CF_QUALIFIED}",
-            ]
-        },
-        "_limit": 200,
-    }
+    # Use GET-based query with Close query language
+    excluded_str = ",".join(f'"{s}"' for s in EXCLUDED_STATUSES)
+    query_str = (
+        f'custom.{CF_FIRST_CALL_BOOKED} >= "{month_start}" '
+        f'custom.{CF_FIRST_CALL_BOOKED} < "{month_end}" '
+        f'lead_status_id not in ({excluded_str})'
+    )
 
-    # Use POST search endpoint for complex queries
-    leads = []
-    cursor = None
-    while True:
-        if cursor:
-            search_query["cursor"] = cursor
-        resp = requests.post(
-            f"{BASE_URL}/lead/search/",
-            auth=AUTH,
-            json=search_query,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        leads.extend(data.get("data", []))
-        cursor = data.get("cursor")
-        if not data.get("has_more", False):
-            break
+    leads = close_get_all("lead", {
+        "query": query_str,
+        "_fields": ",".join([
+            "id",
+            "status_id",
+            f"custom.{CF_FIRST_CALL_BOOKED}",
+            f"custom.{CF_FIRST_CALL_SHOW}",
+            f"custom.{CF_LEAD_OWNER}",
+            f"custom.{CF_QUALIFIED}",
+        ]),
+    })
 
     # Tally meeting metrics per rep
     rep_booked = {}
