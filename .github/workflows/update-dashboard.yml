@@ -1,0 +1,38 @@
+name: Update Rep Metrics Dashboard
+
+on:
+  schedule:
+    - cron: '*/15 14-23 * * 1-5'
+    - cron: '*/15 0-2 * * 2-6'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-dashboard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Fetch data from Close API
+        env:
+          CLOSE_API_KEY: ${{ secrets.CLOSE_API_KEY }}
+        run: python3 scripts/fetch_data.py
+
+      - name: Commit and push updated data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data.json
+          git diff --staged --quiet || git commit -m "📊 Update dashboard data - $(date -u +'%Y-%m-%d %H:%M UTC')"
+          git push
