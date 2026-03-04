@@ -256,46 +256,40 @@ def is_field_filled(value):
 def fetch_meetings_today(today_str, user_map):
     """Fetch meeting activities scheduled for today, filtered by title.
 
-    Uses GET /activity/meeting/ and filters by activity_at date in Python.
-    Meetings return newest-first, so we stop once we pass today.
-    Returns list of qualifying meeting dicts with lead_id and rep info.
+    Uses GET /activity/meeting/ with date_created filter to limit results,
+    then filters by activity_at (meeting start time) = today in Python.
     """
-    today_meetings = []
-    skip = 0
-    limit = 200
-    pages_past_today = 0
+    # Get meetings created in the last 90 days (covers any meeting scheduled for today)
+    cutoff = (datetime.strptime(today_str, "%Y-%m-%d") - timedelta(days=90)).strftime("%Y-%m-%d")
+
+    all_meetings = []
+    cursor = None
 
     while True:
-        data = api_get("/activity/meeting/", {
-            "_skip": str(skip),
-            "_limit": str(limit),
-        })
+        params = {
+            "date_created__gt": cutoff,
+            "_limit": "200",
+        }
+        if cursor:
+            params["_cursor"] = cursor
+
+        data = api_get("/activity/meeting/", params)
         meetings = data.get("data", [])
-        if not meetings:
+        all_meetings.extend(meetings)
+
+        cursor = data.get("cursor")
+        if not data.get("has_more", False) or not cursor:
             break
 
-        found_today = False
-        for m in meetings:
-            activity_at = m.get("activity_at", "") or ""
-            date_part = activity_at[:10] if activity_at else ""
+    print(f"  Total meetings fetched (last 90 days): {len(all_meetings)}")
 
-            if date_part == today_str:
-                today_meetings.append(m)
-                found_today = True
-            elif date_part > today_str:
-                # Future meetings, keep going
-                found_today = True
-
-        # If this entire page had no today/future meetings, we've gone past
-        if not found_today:
-            pages_past_today += 1
-            # Give 2 extra pages buffer then stop
-            if pages_past_today >= 2:
-                break
-
-        if not data.get("has_more", False):
-            break
-        skip += limit
+    # Filter to meetings with activity_at (start time) = today
+    today_meetings = []
+    for m in all_meetings:
+        # activity_at = meeting start time per Close docs
+        activity_at = m.get("activity_at", "") or m.get("starts_at", "") or ""
+        if activity_at[:10] == today_str:
+            today_meetings.append(m)
 
     print(f"  Meetings scheduled for today: {len(today_meetings)}")
 
