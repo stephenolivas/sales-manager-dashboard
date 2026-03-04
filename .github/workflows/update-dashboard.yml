@@ -21,6 +21,9 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Install dependencies
+        run: pip install requests
+
       - name: Fetch data from Close API
         env:
           CLOSE_API_KEY: ${{ secrets.CLOSE_API_KEY }}
