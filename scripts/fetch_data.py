@@ -45,6 +45,12 @@ BASE_URL = "https://api.close.com/api/v1"
 PIPELINE_ID = "pipe_78hyBUVS7IKikGEmstObu1"
 CLOSED_WON_STATUS_ID = "stat_WnFc0uhjcjV0cc3bVzdFVqDz7av6rbsOmOvHUsO6s03"
 
+# Lead statuses to EXCLUDE from meeting counts
+EXCLUDED_LEAD_STATUSES = {
+    "stat_hWIGHjzyNpl4YjIFSFz3VK4fp2ny10SFJLKAihmo4KT",  # Canceled (by Lead)
+    "stat_YV4ZngDB4IGjLjlOf0YTFEWuKZJ6fhNxVkzQkvKYfdB",  # Outside the US
+}
+
 # Custom field IDs and display names (lead object)
 CF_FIRST_CALL_SHOW_ID     = "cf_OPyvpU45RdvjLqfm8V1VWwNxrGKogEH2IBJmfCj0Uhq"
 CF_FIRST_CALL_SHOW_NAME   = "First Call Show Up (Opp)"
