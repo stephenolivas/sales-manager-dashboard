@@ -2,259 +2,375 @@
 """
 Fetch rep-level meeting funnel + close rate metrics from Close CRM.
 Writes data.json for the GitHub Pages dashboard.
+
+Data collected:
+  1. Closed/Won opportunities (MTD) -> revenue & deal counts per rep
+  2. Leads with "First Call Booked Date" in current month -> meetings booked per rep
+  3. "First Call Show Up (Opp)" breakdown: Yes / No / blank per rep
+  4. "Qualified (Opp)" = Yes per rep
+  5. Close rates: booked->close, shown->close, qualified->close
+
+Excluded from meeting counts:
+  - Leads in "Canceled (by Lead)" status
+  - Leads in "Outside the US" status
 """
 
 import json
 import os
-import requests
-from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
+import sys
+from datetime import datetime, timezone, timedelta
+from urllib.request import Request, urlopen
+from urllib.parse import urlencode
+from urllib.error import HTTPError
+from base64 import b64encode
 from calendar import monthrange
 
 # ── Config ───────────────────────────────────────────────────────────────────
 
-API_KEY = os.environ["CLOSE_API_KEY"]
+CLOSE_API_KEY = os.environ.get("CLOSE_API_KEY", "")
 BASE_URL = "https://api.close.com/api/v1"
-AUTH = (API_KEY, "")
-TZ = ZoneInfo("America/Los_Angeles")
 
 PIPELINE_ID = "pipe_78hyBUVS7IKikGEmstObu1"
-CLOSED_WON_STATUS = "stat_WnFc0uhjcjV0cc3bVzdFVqDz7av6rbsOmOvHUsO6s03"
+CLOSED_WON_STATUS_ID = "stat_WnFc0uhjcjV0cc3bVzdFVqDz7av6rbsOmOvHUsO6s03"
 
-# Custom fields (Lead object)
-CF_FIRST_CALL_BOOKED = "cf_JsJZIVh7QDcFQBXr4cTRBxf1AkREpLdsKiZB4AEJ8Xh"
-CF_FIRST_CALL_SHOW = "cf_OPyvpU45RdvjLqfm8V1VWwNxrGKogEH2IBJmfCj0Uhq"
-CF_LEAD_OWNER = "cf_gOfS9pFwext58oberEegLyix8hZzeHrxhCZOVh3P3rd"
-CF_QUALIFIED = "cf_ZDx7NBQaDzV1yYrFcBMzt6cIYj81dAcswpNN0CQzCPS"
-
-# Lead statuses to EXCLUDE from meeting metrics
-EXCLUDED_STATUSES = [
+# Lead statuses to EXCLUDE from meeting counts
+EXCLUDED_LEAD_STATUSES = {
     "stat_hWIGHjzyNpl4YjIFSFz3VK4fp2ny10SFJLKAihmo4KT",  # Canceled (by Lead)
     "stat_YV4ZngDB4IGjLjlOf0YTFEWuKZJ6fhNxVkzQkvKYfdB",  # Outside the US
-]
+}
 
-# Reps to exclude from dashboard
-EXCLUDED_NAMES = {"Kristin Nelson", "Mallory Kent", "Unknown", "Ahmad Bukhari"}
+# Custom field IDs and display names (lead object)
+CF_FIRST_CALL_BOOKED_ID   = "cf_JsJZIVh7QDcFQBXr4cTRBxf1AkREpLdsKiZB4AEJ8Xh"
+CF_FIRST_CALL_BOOKED_NAME = "First Call Booked Date"
 
-# Rep quotas (monthly)
+CF_FIRST_CALL_SHOW_ID     = "cf_OPyvpU45RdvjLqfm8V1VWwNxrGKogEH2IBJmfCj0Uhq"
+CF_FIRST_CALL_SHOW_NAME   = "First Call Show Up (Opp)"
+
+CF_LEAD_OWNER_ID           = "cf_gOfS9pFwext58oberEegLyix8hZzeHrxhCZOVh3P3rd"
+CF_LEAD_OWNER_NAME         = "Lead Owner"
+
+CF_QUALIFIED_ID            = "cf_ZDx7NBQaDzV1yYrFcBMzt6cIYj81dAcswpNN0CQzCPS"
+CF_QUALIFIED_NAME          = "Qualified (Opp)"
+
+TEAM_QUOTA = 906_000
+
 REP_QUOTAS = {
-    "Christian Hartwell": 100000,
-    "Lyle Hubbard": 100000,
-    "Ategeka Musinguzi": 100000,
-    "Scott Seymour": 100000,
-    "Eric Piccione": 100000,
-    "Jordan Humphrey": 75000,
-    "Jason Aaron": 75000,
-    "Robin Perkins": 75000,
-    "William Chase": 75000,
-    "Ryan Jones": 75000,
-    "John Kirk": 75000,
-    "Jake Skinner": 75000,
-    "Vince Bartolini": 50000,
-    "Julia Scaroni": 50000,
-    "Elvis Ellis": 50000,
-    "Chris Wanke": 50000,
-    "Andrea Shoop": 50000,
+    "Christian Hartwell": 100_000,
+    "Lyle Hubbard": 100_000,
+    "Ategeka Musinguzi": 100_000,
+    "Scott Seymour": 100_000,
+    "Eric Piccione": 100_000,
+    "Jordan Humphrey": 75_000,
+    "Jason Aaron": 75_000,
+    "Robin Perkins": 75_000,
+    "William Chase": 75_000,
+    "Ryan Jones": 75_000,
+    "John Kirk": 75_000,
+    "Jake Skinner": 75_000,
+    "Vince Bartolini": 50_000,
+    "Julia Scaroni": 50_000,
+    "Elvis Ellis": 50_000,
+    "Chris Wanke": 50_000,
+    "Andrea Shoop": 50_000,
     "Joe Dysert": 0,
 }
 
-TEAM_QUOTA = 906000
-
-MANAGERS = {"Joe Dysert"}
-
-# ── Helpers ──────────────────────────────────────────────────────────────────
-
-def close_get(endpoint, params=None):
-    """GET from Close API with pagination support."""
-    url = f"{BASE_URL}/{endpoint}"
-    resp = requests.get(url, auth=AUTH, params=params or {})
-    resp.raise_for_status()
-    return resp.json()
+EXCLUDE_USERS = {"Kristin Nelson", "Mallory Kent", "Unknown", "Ahmad Bukhari"}
+MANAGER_USERS = {"Joe Dysert"}
 
 
-def close_get_all(endpoint, params=None):
-    """Paginate through all results from a Close API list endpoint."""
-    params = dict(params or {})
-    params.setdefault("_limit", 200)
-    params["_skip"] = 0
-    results = []
+# ── API helpers (matching working dashboard pattern) ─────────────────────────
+
+def api_get(endpoint, params=None):
+    url = f"{BASE_URL}{endpoint}"
+    if params:
+        url = f"{url}?{urlencode(params)}"
+
+    auth = b64encode(f"{CLOSE_API_KEY}:".encode()).decode()
+    req = Request(url, headers={
+        "Authorization": f"Basic {auth}",
+        "Accept": "application/json",
+    })
+
+    try:
+        with urlopen(req) as resp:
+            return json.loads(resp.read().decode())
+    except HTTPError as e:
+        body = e.read().decode() if e.fp else ""
+        print(f"API error {e.code} for {url}: {body}", file=sys.stderr)
+        raise
+
+
+def fetch_org_users():
+    data = api_get("/user/")
+    users = {}
+    for u in data.get("data", []):
+        first = u.get("first_name", "")
+        last = u.get("last_name", "")
+        full = f"{first} {last}".strip()
+        users[u["id"]] = full
+    return users
+
+
+def get_custom_value(custom_dict, field_id, field_name):
+    """Try multiple key formats to get a custom field value from a lead."""
+    val = custom_dict.get(field_name)
+    if val is not None:
+        return val
+    val = custom_dict.get(field_id)
+    if val is not None:
+        return val
+    val = custom_dict.get(f"custom.{field_id}")
+    if val is not None:
+        return val
+    return ""
+
+
+def resolve_owner_to_name(owner_raw, user_map, name_to_id):
+    """Resolve a Lead Owner value (could be user_id, name, or dict) to a rep name."""
+    if not owner_raw:
+        return "Unknown"
+
+    if isinstance(owner_raw, dict):
+        uid = owner_raw.get("id", "")
+        if uid in user_map:
+            return user_map[uid]
+        return owner_raw.get("name", "Unknown")
+
+    owner_str = str(owner_raw).strip()
+
+    if owner_str in user_map:
+        return user_map[owner_str]
+
+    if owner_str in name_to_id:
+        return owner_str
+
+    for rep_name in REP_QUOTAS:
+        if owner_str == rep_name:
+            return rep_name
+
+    return owner_str if owner_str else "Unknown"
+
+
+# ── Data fetchers ────────────────────────────────────────────────────────────
+
+def fetch_closed_won_opportunities(year, month):
+    _, last_day = monthrange(year, month)
+    date_gte = f"{year}-{month:02d}-01"
+    date_lte = f"{year}-{month:02d}-{last_day:02d}"
+
+    all_opps = []
+    skip = 0
+    limit = 100
+
     while True:
-        data = close_get(endpoint, params)
-        results.extend(data.get("data", []))
+        params = {
+            "status_id": CLOSED_WON_STATUS_ID,
+            "date_won__gte": date_gte,
+            "date_won__lte": date_lte,
+            "_skip": str(skip),
+            "_limit": str(limit),
+        }
+        data = api_get("/opportunity/", params)
+        opps = data.get("data", [])
+        all_opps.extend(opps)
         if not data.get("has_more", False):
             break
-        params["_skip"] += params["_limit"]
-    return results
+        skip += limit
+
+    return [o for o in all_opps if o.get("pipeline_id") == PIPELINE_ID]
 
 
-def build_user_map():
-    """Map user IDs → display names."""
-    users = close_get("user")
-    user_map = {}
-    for u in users.get("data", []):
-        uid = u["id"]
-        name = f"{u.get('first_name', '')} {u.get('last_name', '')}".strip()
-        user_map[uid] = name
-    return user_map
+def fetch_leads_with_calls_booked(year, month, user_map, name_to_id):
+    """Fetch leads with First Call Booked Date in the given month.
 
+    Status exclusions (Canceled, Outside US) are applied in Python after fetch.
+    Returns: (rep_booked, rep_shown, rep_no_show, rep_no_entry, rep_qualified)
+    """
+    _, last_day = monthrange(year, month)
+    date_gte = f"{year}-{month:02d}-01"
+    date_lte = f"{year}-{month:02d}-{last_day:02d}"
 
-def resolve_owner(raw_owner, user_map):
-    """Resolve Lead Owner field which may be user_id or display name."""
-    if not raw_owner:
-        return None
-    if raw_owner.startswith("user_"):
-        return user_map.get(raw_owner, raw_owner)
-    return raw_owner
-
-
-def working_days_in_month(year, month):
-    """Count Mon-Fri days in a month."""
-    _, num_days = monthrange(year, month)
-    count = 0
-    for d in range(1, num_days + 1):
-        dt = datetime(year, month, d)
-        if dt.weekday() < 5:
-            count += 1
-    return count
-
-
-def working_days_elapsed(year, month, today_day):
-    """Count Mon-Fri days elapsed so far (inclusive of today)."""
-    count = 0
-    for d in range(1, today_day + 1):
-        dt = datetime(year, month, d)
-        if dt.weekday() < 5:
-            count += 1
-    return count
-
-
-def safe_pct(numerator, denominator):
-    """Return percentage rounded to 1 decimal, or None if denominator is 0."""
-    if not denominator:
-        return None
-    return round(numerator / denominator * 100, 1)
-
-
-# ── Main ─────────────────────────────────────────────────────────────────────
-
-def main():
-    now = datetime.now(TZ)
-    year, month, day = now.year, now.month, now.day
-    _, days_in_month = monthrange(year, month)
-
-    month_start = f"{year}-{month:02d}-01"
-    month_end_date = datetime(year, month, days_in_month) + timedelta(days=1)
-    month_end = f"{month_end_date.year}-{month_end_date.month:02d}-{month_end_date.day:02d}"
-    today_str = f"{year}-{month:02d}-{day:02d}"
-
-    wd_total = working_days_in_month(year, month)
-    wd_elapsed = working_days_elapsed(year, month, day)
-    pct_month = safe_pct(wd_elapsed, wd_total) or 0
-
-    user_map = build_user_map()
-
-    # ── 1. Fetch Closed/Won Opportunities ────────────────────────────────
-    opps = close_get_all("opportunity", {
-        "status_id": CLOSED_WON_STATUS,
-        "pipeline_id": PIPELINE_ID,
-        "date_won__gte": month_start,
-        "date_won__lt": month_end,
-    })
-
-    # Revenue + deals per rep (one deal per unique lead per rep)
-    rep_revenue = {}
-    rep_deals = {}  # rep → set of lead_ids
-    today_revenue = 0.0
-    today_deals = 0
-
-    for opp in opps:
-        value = (opp.get("value") or 0) / 100.0  # cents → dollars
-        assigned = opp.get("user_name") or user_map.get(opp.get("assigned_to", ""), "Unknown")
-        lead_id = opp.get("lead_id", "")
-        date_won = opp.get("date_won", "")
-
-        if assigned in EXCLUDED_NAMES:
-            continue
-
-        rep_revenue[assigned] = rep_revenue.get(assigned, 0) + value
-        if assigned not in rep_deals:
-            rep_deals[assigned] = set()
-        rep_deals[assigned].add(lead_id)
-
-        if date_won == today_str:
-            today_revenue += value
-            today_deals += 1
-
-    # ── 2. Fetch Meeting Metrics (leads with First Call Booked this month) ─
-    # Close search uses display names in quotes for custom fields
+    # Query format proven to work with Close API
     query_str = (
-        f'"First Call Booked Date" >= "{month_start}" '
-        f'"First Call Booked Date" < "{month_end}" '
-        f'lead_status_id not in ("{EXCLUDED_STATUSES[0]}", "{EXCLUDED_STATUSES[1]}")'
+        f'"First Call Booked Date" >= "{date_gte}" '
+        f'"First Call Booked Date" <= "{date_lte}"'
     )
 
-    leads = close_get_all("lead", {
-        "query": query_str,
-    })
+    all_leads = []
+    skip = 0
+    limit = 200
 
-    # Tally meeting metrics per rep
+    while True:
+        params = {
+            "query": query_str,
+            "_skip": str(skip),
+            "_limit": str(limit),
+        }
+        data = api_get("/lead/", params)
+        leads = data.get("data", [])
+        all_leads.extend(leads)
+        if not data.get("has_more", False):
+            break
+        skip += limit
+
+    print(f"  Raw leads returned: {len(all_leads)}")
+
     rep_booked = {}
     rep_shown = {}
     rep_no_show = {}
     rep_no_entry = {}
     rep_qualified = {}
+    excluded_count = 0
 
-    print(f"   Found {len(leads)} leads with First Call Booked in {month_start} to {month_end}")
-
-    for lead in leads:
-        # Close returns custom fields either in lead["custom"] dict
-        # or as top-level keys like lead["custom.cf_XXX"]
-        custom = lead.get("custom", {})
-
-        # Try both access patterns for Lead Owner
-        raw_owner = (
-            custom.get(CF_LEAD_OWNER)
-            or lead.get(f"custom.{CF_LEAD_OWNER}")
-        )
-        owner = resolve_owner(raw_owner, user_map)
-
-        if not owner or owner in EXCLUDED_NAMES:
+    for lead in all_leads:
+        # Exclude leads in Canceled or Outside US status
+        lead_status_id = lead.get("status_id", "")
+        if lead_status_id in EXCLUDED_LEAD_STATUSES:
+            excluded_count += 1
             continue
 
-        show_up = (
-            custom.get(CF_FIRST_CALL_SHOW)
-            or lead.get(f"custom.{CF_FIRST_CALL_SHOW}")
-        )
-        qualified = (
-            custom.get(CF_QUALIFIED)
-            or lead.get(f"custom.{CF_QUALIFIED}")
-        )
+        custom = lead.get("custom", {})
 
-        rep_booked[owner] = rep_booked.get(owner, 0) + 1
+        # Merge any top-level custom.cf_xxx keys (Close sometimes returns both)
+        merged = {}
+        merged.update(custom)
+        for k, v in lead.items():
+            if k.startswith("custom."):
+                merged[k] = v
+                merged[k.replace("custom.", "")] = v
 
-        if show_up == "Yes":
-            rep_shown[owner] = rep_shown.get(owner, 0) + 1
-        elif show_up == "No":
-            rep_no_show[owner] = rep_no_show.get(owner, 0) + 1
+        owner_raw = get_custom_value(merged, CF_LEAD_OWNER_ID, CF_LEAD_OWNER_NAME)
+        show_up = get_custom_value(merged, CF_FIRST_CALL_SHOW_ID, CF_FIRST_CALL_SHOW_NAME)
+        qualified_val = get_custom_value(merged, CF_QUALIFIED_ID, CF_QUALIFIED_NAME)
+
+        rep_name = resolve_owner_to_name(owner_raw, user_map, name_to_id)
+
+        if rep_name in EXCLUDE_USERS:
+            continue
+
+        # Tally booked
+        rep_booked[rep_name] = rep_booked.get(rep_name, 0) + 1
+
+        # Tally show up breakdown
+        show_str = str(show_up).strip().lower()
+        if show_str == "yes":
+            rep_shown[rep_name] = rep_shown.get(rep_name, 0) + 1
+        elif show_str == "no":
+            rep_no_show[rep_name] = rep_no_show.get(rep_name, 0) + 1
         else:
-            rep_no_entry[owner] = rep_no_entry.get(owner, 0) + 1
+            rep_no_entry[rep_name] = rep_no_entry.get(rep_name, 0) + 1
 
-        if qualified == "Yes":
-            rep_qualified[owner] = rep_qualified.get(owner, 0) + 1
+        # Tally qualified
+        if str(qualified_val).strip().lower() == "yes":
+            rep_qualified[rep_name] = rep_qualified.get(rep_name, 0) + 1
 
-    # ── 3. Build per-rep data ────────────────────────────────────────────
-    all_rep_names = set(REP_QUOTAS.keys()) | set(rep_booked.keys()) | set(rep_revenue.keys())
-    all_rep_names -= EXCLUDED_NAMES
+    print(f"  Excluded {excluded_count} leads (Canceled/Outside US)")
+    print(f"  Counting {len(all_leads) - excluded_count} leads after exclusions")
+
+    return rep_booked, rep_shown, rep_no_show, rep_no_entry, rep_qualified
+
+
+# ── Working days ─────────────────────────────────────────────────────────────
+
+def count_working_days(year, month, up_to_day=None):
+    _, last_day = monthrange(year, month)
+    end_day = min(up_to_day, last_day) if up_to_day else last_day
+    count = 0
+    from datetime import date as d
+    for day in range(1, end_day + 1):
+        if d(year, month, day).weekday() < 5:
+            count += 1
+    return count
+
+
+# ── Main ─────────────────────────────────────────────────────────────────────
+
+def build_dashboard_data():
+    if not CLOSE_API_KEY:
+        print("ERROR: CLOSE_API_KEY environment variable not set.", file=sys.stderr)
+        sys.exit(1)
+
+    now_utc = datetime.now(timezone.utc)
+    try:
+        from zoneinfo import ZoneInfo
+        pst = ZoneInfo("America/Los_Angeles")
+    except ImportError:
+        pst = timezone(timedelta(hours=-8))
+    now = now_utc.astimezone(pst)
+
+    year, month, today_day = now.year, now.month, now.day
+    today_str = now.strftime("%Y-%m-%d")
+    _, last_day = monthrange(year, month)
+
+    print(f"Fetching data for {year}-{month:02d} (day {today_day}, PST)...")
+
+    # Step 1: User map
+    print("  Fetching org users...")
+    user_map = fetch_org_users()
+    name_to_id = {v: k for k, v in user_map.items()}
+    print(f"  Found {len(user_map)} users.")
+
+    # Step 2: Closed/Won opportunities
+    print("  Fetching Closed/Won opportunities...")
+    opps = fetch_closed_won_opportunities(year, month)
+    print(f"  Found {len(opps)} Closed/Won opportunities.")
+
+    rep_revenue = {}
+    rep_deals = {}
+    today_revenue = 0.0
+    today_deals = 0
+    seen_leads = set()
+
+    for opp in opps:
+        user_id = opp.get("user_id")
+        rep_name = user_map.get(user_id, "Unknown")
+        if rep_name in EXCLUDE_USERS:
+            continue
+
+        value_dollars = (opp.get("value", 0) or 0) / 100
+        lead_id = opp.get("lead_id", "")
+        date_won = opp.get("date_won", "")
+
+        rep_revenue[rep_name] = rep_revenue.get(rep_name, 0) + value_dollars
+
+        lead_key = f"{rep_name}:{lead_id}"
+        if lead_key not in seen_leads:
+            rep_deals[rep_name] = rep_deals.get(rep_name, 0) + 1
+            seen_leads.add(lead_key)
+
+        if date_won == today_str:
+            today_revenue += value_dollars
+            today_deals += 1
+
+    # Step 3: Meeting funnel metrics
+    print("  Fetching meetings booked/shown/qualified...")
+    rep_booked, rep_shown, rep_no_show, rep_no_entry, rep_qualified = \
+        fetch_leads_with_calls_booked(year, month, user_map, name_to_id)
+    print(f"  Meetings booked by {len(rep_booked)} reps.")
+
+    # Step 4: Build per-rep data
+    all_rep_names = set()
+    all_rep_names.update(rep_revenue.keys())
+    all_rep_names.update(rep_deals.keys())
+    all_rep_names.update(rep_booked.keys())
+    all_rep_names.update(REP_QUOTAS.keys())
+    all_rep_names -= EXCLUDE_USERS
+
+    def safe_pct(num, den):
+        if not den:
+            return None
+        return round(num / den * 100, 1)
 
     reps = []
-    for name in sorted(all_rep_names):
+    for name in all_rep_names:
+        revenue = rep_revenue.get(name, 0)
+        deals = rep_deals.get(name, 0)
         booked = rep_booked.get(name, 0)
         shown = rep_shown.get(name, 0)
         no_show = rep_no_show.get(name, 0)
         no_entry = rep_no_entry.get(name, 0)
         qualified = rep_qualified.get(name, 0)
-        revenue = rep_revenue.get(name, 0)
-        deals = len(rep_deals.get(name, set()))
         quota = REP_QUOTAS.get(name, 0)
 
         reps.append({
@@ -272,13 +388,13 @@ def main():
             "close_rate": safe_pct(deals, booked),
             "shown_to_close_rate": safe_pct(deals, shown),
             "qualified_to_close_rate": safe_pct(deals, qualified),
-            "is_manager": name in MANAGERS,
+            "is_manager": name in MANAGER_USERS,
         })
 
     # Sort by booked descending (default)
     reps.sort(key=lambda r: r["booked"], reverse=True)
 
-    # ── 4. Team totals ───────────────────────────────────────────────────
+    # Step 5: Team totals
     total_booked = sum(r["booked"] for r in reps)
     total_shown = sum(r["shown"] for r in reps)
     total_no_show = sum(r["no_show"] for r in reps)
@@ -287,13 +403,18 @@ def main():
     total_revenue = sum(r["revenue"] for r in reps)
     total_deals = sum(r["deals"] for r in reps)
 
-    output = {
+    # Step 6: Time context
+    working_days_total = count_working_days(year, month)
+    working_days_elapsed = count_working_days(year, month, today_day)
+    pct_month = safe_pct(working_days_elapsed, working_days_total) or 0
+
+    return {
         "updated_at": now.strftime("%Y-%m-%d %I:%M %p PST"),
         "month_label": now.strftime("%B %Y"),
-        "day_of_month": day,
-        "days_in_month": days_in_month,
-        "working_days_total": wd_total,
-        "working_days_elapsed": wd_elapsed,
+        "day_of_month": today_day,
+        "days_in_month": last_day,
+        "working_days_total": working_days_total,
+        "working_days_elapsed": working_days_elapsed,
         "pct_month_passed": pct_month,
         "team_quota": TEAM_QUOTA,
         "total_revenue": round(total_revenue, 2),
@@ -313,17 +434,18 @@ def main():
         "reps": reps,
     }
 
-    # ── 5. Write output ──────────────────────────────────────────────────
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    repo_root = os.path.dirname(script_dir)
-    out_path = os.path.join(repo_root, "data.json")
-
-    with open(out_path, "w") as f:
-        json.dump(output, f, indent=2)
-
-    print(f"✅ Wrote {out_path}")
-    print(f"   {len(reps)} reps | {total_booked} booked | {total_shown} shown | {total_deals} deals | ${total_revenue:,.2f} revenue")
-
 
 if __name__ == "__main__":
-    main()
+    data = build_dashboard_data()
+
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    repo_root = os.path.dirname(script_dir)
+    output_path = os.path.join(repo_root, "data.json")
+
+    with open(output_path, "w") as f:
+        json.dump(data, f, indent=2)
+
+    print(f"✅ Wrote {output_path}")
+    print(f"   {len(data['reps'])} reps | {data['total_booked']} booked | "
+          f"{data['total_shown']} shown | {data['total_deals']} deals | "
+          f"${data['total_revenue']:,.2f} revenue")
