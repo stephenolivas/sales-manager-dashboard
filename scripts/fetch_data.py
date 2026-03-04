@@ -256,41 +256,52 @@ def is_field_filled(value):
 def fetch_meetings_today(today_str, user_map):
     """Fetch meeting activities scheduled for today, filtered by title.
 
-    Uses Close activity search endpoint with activity_at date range.
+    Uses GET /activity/meeting/ and filters by activity_at date in Python.
+    Meetings return newest-first, so we stop once we pass today.
     Returns list of qualifying meeting dicts with lead_id and rep info.
     """
-    # Build PST date range for today
-    start_dt = f"{today_str}T00:00:00-08:00"
-    next_day = (datetime.strptime(today_str, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
-    end_dt = f"{next_day}T00:00:00-08:00"
-
-    all_meetings = []
-    cursor = None
+    today_meetings = []
+    skip = 0
+    limit = 200
+    pages_past_today = 0
 
     while True:
-        body = {
-            "activity_types": ["activity.meeting"],
-            "activity_at": {
-                "start": start_dt,
-                "end": end_dt,
-            },
-        }
-        if cursor:
-            body["cursor"] = cursor
-
-        data = api_post("/activity/search/", body)
-        events = data.get("data", data.get("events", []))
-        all_meetings.extend(events)
-
-        cursor = data.get("cursor")
-        if not data.get("has_more", False) or not cursor:
+        data = api_get("/activity/meeting/", {
+            "_skip": str(skip),
+            "_limit": str(limit),
+        })
+        meetings = data.get("data", [])
+        if not meetings:
             break
 
-    print(f"  Meetings found for today: {len(all_meetings)}")
+        found_today = False
+        for m in meetings:
+            activity_at = m.get("activity_at", "") or ""
+            date_part = activity_at[:10] if activity_at else ""
+
+            if date_part == today_str:
+                today_meetings.append(m)
+                found_today = True
+            elif date_part > today_str:
+                # Future meetings, keep going
+                found_today = True
+
+        # If this entire page had no today/future meetings, we've gone past
+        if not found_today:
+            pages_past_today += 1
+            # Give 2 extra pages buffer then stop
+            if pages_past_today >= 2:
+                break
+
+        if not data.get("has_more", False):
+            break
+        skip += limit
+
+    print(f"  Meetings scheduled for today: {len(today_meetings)}")
 
     # Filter by user exclusion
     user_filtered = []
-    for m in all_meetings:
+    for m in today_meetings:
         user_id = m.get("user_id", "")
         rep_name = user_map.get(user_id, "Unknown")
         if rep_name in EXCLUDE_USERS:
