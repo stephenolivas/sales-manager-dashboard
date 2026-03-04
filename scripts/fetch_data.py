@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
 """
-Fetch rep-level meeting funnel + close rate metrics from Close CRM.
+Fetch DAILY rep-level metrics from Close CRM.
 Writes data.json for the GitHub Pages dashboard.
 
-Data collected:
-  1. Closed/Won opportunities (MTD) -> revenue & deal counts per rep
-  2. Leads with "First Call Booked Date" in current month -> meetings booked per rep
-  3. "First Call Show Up (Opp)" breakdown: Yes / No / blank per rep
-  4. "Qualified (Opp)" = Yes per rep
-  5. Close rates: booked->close, shown->close, qualified->close
-
-Excluded from meeting counts:
-  - Leads in "Canceled (by Lead)" status
-  - Leads in "Outside the US" status
+Daily metrics per rep (with targets):
+  1. New Meetings Booked — target 4
+  2. New Meetings Shown — target 3
+  3. New Opps Qualified — target 2
+  4. Closed Won Opps — target 1
+  5. Revenue Booked — target $5k
+  6. Close Rate — target 30%
+  7. QA Score — target >7 (TBD)
+  8. Avg Revenue per Deal — target $8k
+  9. CRM Compliance — target 100%
+ 10. Task Adherence — target 100% (TBD)
 """
 
 import json
@@ -33,7 +34,6 @@ BASE_URL = "https://api.close.com/api/v1"
 PIPELINE_ID = "pipe_78hyBUVS7IKikGEmstObu1"
 CLOSED_WON_STATUS_ID = "stat_WnFc0uhjcjV0cc3bVzdFVqDz7av6rbsOmOvHUsO6s03"
 
-# Lead statuses to EXCLUDE from meeting counts
 EXCLUDED_LEAD_STATUSES = {
     "stat_hWIGHjzyNpl4YjIFSFz3VK4fp2ny10SFJLKAihmo4KT",  # Canceled (by Lead)
     "stat_YV4ZngDB4IGjLjlOf0YTFEWuKZJ6fhNxVkzQkvKYfdB",  # Outside the US
@@ -52,7 +52,22 @@ CF_LEAD_OWNER_NAME         = "Lead Owner"
 CF_QUALIFIED_ID            = "cf_ZDx7NBQaDzV1yYrFcBMzt6cIYj81dAcswpNN0CQzCPS"
 CF_QUALIFIED_NAME          = "Qualified (Opp)"
 
-TEAM_QUOTA = 906_000
+CF_CALL_DISPOSITION_ID     = "cf_n2QvikNfeZ0uWObMsyCJmnXnrbWNLGlSvYiKJTwxTqU"
+CF_CALL_DISPOSITION_NAME   = "Todays Call Disposition (Opp)"
+
+# Daily targets (per rep)
+DAILY_TARGETS = {
+    "booked": 4,
+    "shown": 3,
+    "qualified": 2,
+    "deals": 1,
+    "revenue": 5000,
+    "close_rate": 30,
+    "qa_score": 7,
+    "avg_rev_per_deal": 8000,
+    "crm_compliance": 100,
+    "task_adherence": 100,
+}
 
 REP_QUOTAS = {
     "Christian Hartwell": 100_000,
@@ -79,7 +94,7 @@ EXCLUDE_USERS = {"Kristin Nelson", "Mallory Kent", "Unknown", "Ahmad Bukhari"}
 MANAGER_USERS = {"Joe Dysert"}
 
 
-# ── API helpers (matching working dashboard pattern) ─────────────────────────
+# ── API helpers ──────────────────────────────────────────────────────────────
 
 def api_get(endpoint, params=None):
     url = f"{BASE_URL}{endpoint}"
@@ -113,7 +128,6 @@ def fetch_org_users():
 
 
 def get_custom_value(custom_dict, field_id, field_name):
-    """Try multiple key formats to get a custom field value from a lead."""
     val = custom_dict.get(field_name)
     if val is not None:
         return val
@@ -127,47 +141,49 @@ def get_custom_value(custom_dict, field_id, field_name):
 
 
 def resolve_owner_to_name(owner_raw, user_map, name_to_id):
-    """Resolve a Lead Owner value (could be user_id, name, or dict) to a rep name."""
     if not owner_raw:
         return "Unknown"
-
     if isinstance(owner_raw, dict):
         uid = owner_raw.get("id", "")
         if uid in user_map:
             return user_map[uid]
         return owner_raw.get("name", "Unknown")
-
     owner_str = str(owner_raw).strip()
-
     if owner_str in user_map:
         return user_map[owner_str]
-
     if owner_str in name_to_id:
         return owner_str
-
     for rep_name in REP_QUOTAS:
         if owner_str == rep_name:
             return rep_name
-
     return owner_str if owner_str else "Unknown"
+
+
+def safe_pct(num, den):
+    if not den:
+        return None
+    return round(num / den * 100, 1)
+
+
+def is_field_filled(value):
+    if value is None:
+        return False
+    if isinstance(value, str) and value.strip() == "":
+        return False
+    return True
 
 
 # ── Data fetchers ────────────────────────────────────────────────────────────
 
-def fetch_closed_won_opportunities(year, month):
-    _, last_day = monthrange(year, month)
-    date_gte = f"{year}-{month:02d}-01"
-    date_lte = f"{year}-{month:02d}-{last_day:02d}"
-
+def fetch_closed_won_today(today_str):
     all_opps = []
     skip = 0
     limit = 100
-
     while True:
         params = {
             "status_id": CLOSED_WON_STATUS_ID,
-            "date_won__gte": date_gte,
-            "date_won__lte": date_lte,
+            "date_won__gte": today_str,
+            "date_won__lte": today_str,
             "_skip": str(skip),
             "_limit": str(limit),
         }
@@ -177,30 +193,18 @@ def fetch_closed_won_opportunities(year, month):
         if not data.get("has_more", False):
             break
         skip += limit
-
     return [o for o in all_opps if o.get("pipeline_id") == PIPELINE_ID]
 
 
-def fetch_leads_with_calls_booked(year, month, user_map, name_to_id):
-    """Fetch leads with First Call Booked Date in the given month.
-
-    Status exclusions (Canceled, Outside US) are applied in Python after fetch.
-    Returns: (rep_booked, rep_shown, rep_no_show, rep_no_entry, rep_qualified)
-    """
-    _, last_day = monthrange(year, month)
-    date_gte = f"{year}-{month:02d}-01"
-    date_lte = f"{year}-{month:02d}-{last_day:02d}"
-
-    # Query format proven to work with Close API
+def fetch_leads_booked_today(today_str, user_map, name_to_id):
     query_str = (
-        f'"First Call Booked Date" >= "{date_gte}" '
-        f'"First Call Booked Date" <= "{date_lte}"'
+        f'"First Call Booked Date" >= "{today_str}" '
+        f'"First Call Booked Date" <= "{today_str}"'
     )
 
     all_leads = []
     skip = 0
     limit = 200
-
     while True:
         params = {
             "query": query_str,
@@ -214,25 +218,22 @@ def fetch_leads_with_calls_booked(year, month, user_map, name_to_id):
             break
         skip += limit
 
-    print(f"  Raw leads returned: {len(all_leads)}")
+    print(f"  Raw leads returned for today: {len(all_leads)}")
 
     rep_booked = {}
     rep_shown = {}
-    rep_no_show = {}
-    rep_no_entry = {}
     rep_qualified = {}
+    rep_crm_filled = {}
+    rep_crm_total = {}
     excluded_count = 0
 
     for lead in all_leads:
-        # Exclude leads in Canceled or Outside US status
         lead_status_id = lead.get("status_id", "")
         if lead_status_id in EXCLUDED_LEAD_STATUSES:
             excluded_count += 1
             continue
 
         custom = lead.get("custom", {})
-
-        # Merge any top-level custom.cf_xxx keys (Close sometimes returns both)
         merged = {}
         merged.update(custom)
         for k, v in lead.items():
@@ -241,47 +242,57 @@ def fetch_leads_with_calls_booked(year, month, user_map, name_to_id):
                 merged[k.replace("custom.", "")] = v
 
         owner_raw = get_custom_value(merged, CF_LEAD_OWNER_ID, CF_LEAD_OWNER_NAME)
-        show_up = get_custom_value(merged, CF_FIRST_CALL_SHOW_ID, CF_FIRST_CALL_SHOW_NAME)
-        qualified_val = get_custom_value(merged, CF_QUALIFIED_ID, CF_QUALIFIED_NAME)
-
         rep_name = resolve_owner_to_name(owner_raw, user_map, name_to_id)
 
         if rep_name in EXCLUDE_USERS:
             continue
 
-        # Tally booked
         rep_booked[rep_name] = rep_booked.get(rep_name, 0) + 1
 
-        # Tally show up breakdown
-        show_str = str(show_up).strip().lower()
-        if show_str == "yes":
+        show_up = get_custom_value(merged, CF_FIRST_CALL_SHOW_ID, CF_FIRST_CALL_SHOW_NAME)
+        if str(show_up).strip().lower() == "yes":
             rep_shown[rep_name] = rep_shown.get(rep_name, 0) + 1
-        elif show_str == "no":
-            rep_no_show[rep_name] = rep_no_show.get(rep_name, 0) + 1
-        else:
-            rep_no_entry[rep_name] = rep_no_entry.get(rep_name, 0) + 1
 
-        # Tally qualified
+        qualified_val = get_custom_value(merged, CF_QUALIFIED_ID, CF_QUALIFIED_NAME)
         if str(qualified_val).strip().lower() == "yes":
             rep_qualified[rep_name] = rep_qualified.get(rep_name, 0) + 1
+
+        # CRM Compliance (4 fields per lead)
+        crm_checks = 0
+        crm_filled = 0
+
+        crm_checks += 1
+        if is_field_filled(show_up):
+            crm_filled += 1
+
+        disposition = get_custom_value(merged, CF_CALL_DISPOSITION_ID, CF_CALL_DISPOSITION_NAME)
+        crm_checks += 1
+        if is_field_filled(disposition):
+            crm_filled += 1
+
+        crm_checks += 1
+        if is_field_filled(qualified_val):
+            crm_filled += 1
+
+        crm_checks += 1
+        opp_confidence_filled = False
+        opportunities = lead.get("opportunities", [])
+        for opp in opportunities:
+            if opp.get("pipeline_id") == PIPELINE_ID:
+                confidence = opp.get("confidence", 0) or 0
+                if confidence > 0:
+                    opp_confidence_filled = True
+                    break
+        if opp_confidence_filled:
+            crm_filled += 1
+
+        rep_crm_filled[rep_name] = rep_crm_filled.get(rep_name, 0) + crm_filled
+        rep_crm_total[rep_name] = rep_crm_total.get(rep_name, 0) + crm_checks
 
     print(f"  Excluded {excluded_count} leads (Canceled/Outside US)")
     print(f"  Counting {len(all_leads) - excluded_count} leads after exclusions")
 
-    return rep_booked, rep_shown, rep_no_show, rep_no_entry, rep_qualified
-
-
-# ── Working days ─────────────────────────────────────────────────────────────
-
-def count_working_days(year, month, up_to_day=None):
-    _, last_day = monthrange(year, month)
-    end_day = min(up_to_day, last_day) if up_to_day else last_day
-    count = 0
-    from datetime import date as d
-    for day in range(1, end_day + 1):
-        if d(year, month, day).weekday() < 5:
-            count += 1
-    return count
+    return rep_booked, rep_shown, rep_qualified, rep_crm_filled, rep_crm_total
 
 
 # ── Main ─────────────────────────────────────────────────────────────────────
@@ -299,11 +310,8 @@ def build_dashboard_data():
         pst = timezone(timedelta(hours=-8))
     now = now_utc.astimezone(pst)
 
-    year, month, today_day = now.year, now.month, now.day
     today_str = now.strftime("%Y-%m-%d")
-    _, last_day = monthrange(year, month)
-
-    print(f"Fetching data for {year}-{month:02d} (day {today_day}, PST)...")
+    print(f"Fetching DAILY data for {today_str} (PST)...")
 
     # Step 1: User map
     print("  Fetching org users...")
@@ -311,15 +319,13 @@ def build_dashboard_data():
     name_to_id = {v: k for k, v in user_map.items()}
     print(f"  Found {len(user_map)} users.")
 
-    # Step 2: Closed/Won opportunities
-    print("  Fetching Closed/Won opportunities...")
-    opps = fetch_closed_won_opportunities(year, month)
-    print(f"  Found {len(opps)} Closed/Won opportunities.")
+    # Step 2: Closed/Won opportunities TODAY
+    print("  Fetching Closed/Won opportunities for today...")
+    opps = fetch_closed_won_today(today_str)
+    print(f"  Found {len(opps)} Closed/Won opportunities today.")
 
     rep_revenue = {}
     rep_deals = {}
-    today_revenue = 0.0
-    today_deals = 0
     seen_leads = set()
 
     for opp in opps:
@@ -330,7 +336,6 @@ def build_dashboard_data():
 
         value_dollars = (opp.get("value", 0) or 0) / 100
         lead_id = opp.get("lead_id", "")
-        date_won = opp.get("date_won", "")
 
         rep_revenue[rep_name] = rep_revenue.get(rep_name, 0) + value_dollars
 
@@ -339,28 +344,18 @@ def build_dashboard_data():
             rep_deals[rep_name] = rep_deals.get(rep_name, 0) + 1
             seen_leads.add(lead_key)
 
-        if date_won == today_str:
-            today_revenue += value_dollars
-            today_deals += 1
-
-    # Step 3: Meeting funnel metrics
-    print("  Fetching meetings booked/shown/qualified...")
-    rep_booked, rep_shown, rep_no_show, rep_no_entry, rep_qualified = \
-        fetch_leads_with_calls_booked(year, month, user_map, name_to_id)
-    print(f"  Meetings booked by {len(rep_booked)} reps.")
+    # Step 3: Meeting funnel + CRM compliance for today
+    print("  Fetching leads booked today...")
+    rep_booked, rep_shown, rep_qualified, rep_crm_filled, rep_crm_total = \
+        fetch_leads_booked_today(today_str, user_map, name_to_id)
+    print(f"  Meetings booked today by {len(rep_booked)} reps.")
 
     # Step 4: Build per-rep data
     all_rep_names = set()
     all_rep_names.update(rep_revenue.keys())
-    all_rep_names.update(rep_deals.keys())
     all_rep_names.update(rep_booked.keys())
     all_rep_names.update(REP_QUOTAS.keys())
     all_rep_names -= EXCLUDE_USERS
-
-    def safe_pct(num, den):
-        if not den:
-            return None
-        return round(num / den * 100, 1)
 
     reps = []
     for name in all_rep_names:
@@ -368,69 +363,54 @@ def build_dashboard_data():
         deals = rep_deals.get(name, 0)
         booked = rep_booked.get(name, 0)
         shown = rep_shown.get(name, 0)
-        no_show = rep_no_show.get(name, 0)
-        no_entry = rep_no_entry.get(name, 0)
         qualified = rep_qualified.get(name, 0)
-        quota = REP_QUOTAS.get(name, 0)
+        crm_filled = rep_crm_filled.get(name, 0)
+        crm_total = rep_crm_total.get(name, 0)
+
+        avg_rev = round(revenue / deals, 2) if deals > 0 else None
 
         reps.append({
             "name": name,
-            "revenue": round(revenue, 2),
-            "deals": deals,
-            "quota": quota,
-            "pct_to_quota": safe_pct(revenue, quota),
             "booked": booked,
             "shown": shown,
-            "no_show": no_show,
-            "no_entry": no_entry,
             "qualified": qualified,
-            "show_rate": safe_pct(shown, booked),
+            "deals": deals,
+            "revenue": round(revenue, 2),
             "close_rate": safe_pct(deals, booked),
-            "shown_to_close_rate": safe_pct(deals, shown),
-            "qualified_to_close_rate": safe_pct(deals, qualified),
+            "qa_score": None,
+            "avg_rev_per_deal": avg_rev,
+            "crm_compliance": safe_pct(crm_filled, crm_total),
+            "crm_filled": crm_filled,
+            "crm_total": crm_total,
+            "task_adherence": None,
             "is_manager": name in MANAGER_USERS,
         })
 
-    # Sort by booked descending (default)
     reps.sort(key=lambda r: r["booked"], reverse=True)
 
     # Step 5: Team totals
     total_booked = sum(r["booked"] for r in reps)
     total_shown = sum(r["shown"] for r in reps)
-    total_no_show = sum(r["no_show"] for r in reps)
-    total_no_entry = sum(r["no_entry"] for r in reps)
     total_qualified = sum(r["qualified"] for r in reps)
-    total_revenue = sum(r["revenue"] for r in reps)
     total_deals = sum(r["deals"] for r in reps)
-
-    # Step 6: Time context
-    working_days_total = count_working_days(year, month)
-    working_days_elapsed = count_working_days(year, month, today_day)
-    pct_month = safe_pct(working_days_elapsed, working_days_total) or 0
+    total_revenue = sum(r["revenue"] for r in reps)
+    total_crm_filled = sum(r["crm_filled"] for r in reps)
+    total_crm_total = sum(r["crm_total"] for r in reps)
+    total_avg_rev = round(total_revenue / total_deals, 2) if total_deals > 0 else None
 
     return {
         "updated_at": now.strftime("%Y-%m-%d %I:%M %p PST"),
-        "month_label": now.strftime("%B %Y"),
-        "day_of_month": today_day,
-        "days_in_month": last_day,
-        "working_days_total": working_days_total,
-        "working_days_elapsed": working_days_elapsed,
-        "pct_month_passed": pct_month,
-        "team_quota": TEAM_QUOTA,
-        "total_revenue": round(total_revenue, 2),
-        "total_deals": total_deals,
+        "date_label": now.strftime("%A, %B %d, %Y"),
+        "date_str": today_str,
+        "targets": DAILY_TARGETS,
         "total_booked": total_booked,
         "total_shown": total_shown,
-        "total_no_show": total_no_show,
-        "total_no_entry": total_no_entry,
         "total_qualified": total_qualified,
-        "team_show_rate": safe_pct(total_shown, total_booked),
+        "total_deals": total_deals,
+        "total_revenue": round(total_revenue, 2),
         "team_close_rate": safe_pct(total_deals, total_booked),
-        "team_shown_to_close_rate": safe_pct(total_deals, total_shown),
-        "team_qualified_to_close_rate": safe_pct(total_deals, total_qualified),
-        "pct_team_quota": safe_pct(total_revenue, TEAM_QUOTA),
-        "today_revenue": round(today_revenue, 2),
-        "today_deals": today_deals,
+        "team_avg_rev_per_deal": total_avg_rev,
+        "team_crm_compliance": safe_pct(total_crm_filled, total_crm_total),
         "reps": reps,
     }
 
@@ -447,5 +427,4 @@ if __name__ == "__main__":
 
     print(f"✅ Wrote {output_path}")
     print(f"   {len(data['reps'])} reps | {data['total_booked']} booked | "
-          f"{data['total_shown']} shown | {data['total_deals']} deals | "
-          f"${data['total_revenue']:,.2f} revenue")
+          f"{data['total_deals']} deals | ${data['total_revenue']:,.2f} revenue")
