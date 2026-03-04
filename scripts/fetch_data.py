@@ -175,6 +175,25 @@ def api_get(endpoint, params=None):
         raise
 
 
+def api_post(endpoint, body):
+    url = f"{BASE_URL}{endpoint}"
+    auth = b64encode(f"{CLOSE_API_KEY}:".encode()).decode()
+    data = json.dumps(body).encode()
+    req = Request(url, data=data, method="POST", headers={
+        "Authorization": f"Basic {auth}",
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+    })
+
+    try:
+        with urlopen(req) as resp:
+            return json.loads(resp.read().decode())
+    except HTTPError as e:
+        body_text = e.read().decode() if e.fp else ""
+        print(f"API POST error {e.code} for {url}: {body_text}", file=sys.stderr)
+        raise
+
+
 def fetch_org_users():
     data = api_get("/user/")
     users = {}
@@ -237,49 +256,41 @@ def is_field_filled(value):
 def fetch_meetings_today(today_str, user_map):
     """Fetch meeting activities scheduled for today, filtered by title.
 
-    Uses Close activity/meeting endpoint. Fetches meetings created in the
-    last 60 days and filters by activity_at date matching today in PST.
+    Uses Close activity search endpoint with activity_at date range.
     Returns list of qualifying meeting dicts with lead_id and rep info.
     """
-    # Fetch meetings created recently (covers any meeting scheduled for today)
-    cutoff = (datetime.strptime(today_str, "%Y-%m-%d") - timedelta(days=60)).strftime("%Y-%m-%d")
+    # Build PST date range for today
+    start_dt = f"{today_str}T00:00:00-08:00"
+    next_day = (datetime.strptime(today_str, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
+    end_dt = f"{next_day}T00:00:00-08:00"
 
     all_meetings = []
-    skip = 0
-    limit = 200
+    cursor = None
 
     while True:
-        params = {
-            "date_created__gte": cutoff,
-            "_skip": str(skip),
-            "_limit": str(limit),
+        body = {
+            "activity_types": ["activity.meeting"],
+            "activity_at": {
+                "start": start_dt,
+                "end": end_dt,
+            },
         }
-        data = api_get("/activity/meeting/", params)
-        meetings = data.get("data", [])
-        all_meetings.extend(meetings)
-        if not data.get("has_more", False):
+        if cursor:
+            body["cursor"] = cursor
+
+        data = api_post("/activity/search/", body)
+        events = data.get("data", data.get("events", []))
+        all_meetings.extend(events)
+
+        cursor = data.get("cursor")
+        if not data.get("has_more", False) or not cursor:
             break
-        skip += limit
 
-    print(f"  Raw meetings fetched (last 60 days): {len(all_meetings)}")
-
-    # Filter to meetings starting today
-    # Check multiple possible date fields
-    today_meetings = []
-    for m in all_meetings:
-        # Try starts_at, then activity_at, then date
-        start = m.get("starts_at", "") or m.get("activity_at", "") or ""
-        if not start:
-            continue
-        # Compare date portion (first 10 chars = YYYY-MM-DD)
-        if start[:10] == today_str:
-            today_meetings.append(m)
-
-    print(f"  Meetings scheduled for today: {len(today_meetings)}")
+    print(f"  Meetings found for today: {len(all_meetings)}")
 
     # Filter by user exclusion
     user_filtered = []
-    for m in today_meetings:
+    for m in all_meetings:
         user_id = m.get("user_id", "")
         rep_name = user_map.get(user_id, "Unknown")
         if rep_name in EXCLUDE_USERS:
