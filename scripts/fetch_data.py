@@ -3,17 +3,27 @@
 Fetch DAILY rep-level metrics from Close CRM.
 Writes data.json for the GitHub Pages dashboard.
 
-Daily metrics per rep (with targets):
-  1. New Meetings Booked — target 4
-  2. New Meetings Shown — target 3
-  3. New Opps Qualified — target 2
-  4. Closed Won Opps — target 1
-  5. Revenue Booked — target $5k
-  6. Close Rate — target 30%
-  7. QA Score — target >7 (TBD)
-  8. Avg Revenue per Deal — target $8k
-  9. CRM Compliance — target 100%
- 10. Task Adherence — target 100% (TBD)
+Meeting source: Close CRM meeting activities, filtered by title patterns
+to count only net-new first strategy calls.
+
+Title-based include patterns (case-insensitive):
+  - "Vending Strategy Call"
+  - "Vendingpreneurs Consultation" (+ misspellings)
+  - "Vendingpreneurs Strategy Call" (+ misspellings)
+  - "New Vendingpreneur Strategy Call"
+  - "Vending Consult"
+
+Title-based exclude patterns:
+  - Starts with "Canceled:"
+  - Contains "Vending Quick Discovery"
+  - Follow-up patterns: "follow-up", "follow up", "fallow up", "F/U",
+    "Next Steps", "Rescheduled", "reschedule"
+  - Contains "Anthony" AND "Q&A"
+  - Enrollment patterns: "enrollment", "Silver Start up",
+    "Bronze enrollment", "questions on enrollment"
+
+Excluded users: Kristin Nelson, Spencer Reynolds, Stephen Olivas,
+                Ahmad Bukhari, Mallory Kent, Unknown
 """
 
 import json
@@ -25,6 +35,7 @@ from urllib.parse import urlencode
 from urllib.error import HTTPError
 from base64 import b64encode
 from calendar import monthrange
+import re
 
 # ── Config ───────────────────────────────────────────────────────────────────
 
@@ -34,15 +45,7 @@ BASE_URL = "https://api.close.com/api/v1"
 PIPELINE_ID = "pipe_78hyBUVS7IKikGEmstObu1"
 CLOSED_WON_STATUS_ID = "stat_WnFc0uhjcjV0cc3bVzdFVqDz7av6rbsOmOvHUsO6s03"
 
-EXCLUDED_LEAD_STATUSES = {
-    "stat_hWIGHjzyNpl4YjIFSFz3VK4fp2ny10SFJLKAihmo4KT",  # Canceled (by Lead)
-    "stat_YV4ZngDB4IGjLjlOf0YTFEWuKZJ6fhNxVkzQkvKYfdB",  # Outside the US
-}
-
 # Custom field IDs and display names (lead object)
-CF_FIRST_CALL_BOOKED_ID   = "cf_JsJZIVh7QDcFQBXr4cTRBxf1AkREpLdsKiZB4AEJ8Xh"
-CF_FIRST_CALL_BOOKED_NAME = "First Call Booked Date"
-
 CF_FIRST_CALL_SHOW_ID     = "cf_OPyvpU45RdvjLqfm8V1VWwNxrGKogEH2IBJmfCj0Uhq"
 CF_FIRST_CALL_SHOW_NAME   = "First Call Show Up (Opp)"
 
@@ -90,8 +93,64 @@ REP_QUOTAS = {
     "Joe Dysert": 0,
 }
 
-EXCLUDE_USERS = {"Kristin Nelson", "Mallory Kent", "Unknown", "Ahmad Bukhari"}
+EXCLUDE_USERS = {
+    "Kristin Nelson", "Spencer Reynolds", "Stephen Olivas",
+    "Ahmad Bukhari", "Mallory Kent", "Unknown",
+}
 MANAGER_USERS = {"Joe Dysert"}
+
+
+# ── Meeting title classification ─────────────────────────────────────────────
+
+# Patterns that qualify as first calls (case-insensitive)
+INCLUDE_PATTERNS = [
+    r"vending\s+strategy\s+call",
+    r"vendingpren[eu]+rs?\s+consultation",
+    r"vendingpren[eu]+rs?\s+strategy\s+call",
+    r"new\s+vendingpren[eu]+r\s+strategy\s+call",
+    r"vending\s+consult",
+]
+INCLUDE_RES = [re.compile(p, re.IGNORECASE) for p in INCLUDE_PATTERNS]
+
+# Patterns that exclude (checked before includes)
+EXCLUDE_TITLE_STARTS = ["canceled:"]
+EXCLUDE_TITLE_CONTAINS = [
+    "vending quick discovery",
+    "follow-up", "follow up", "fallow up", "f/u",
+    "next steps", "rescheduled", "reschedule",
+    "enrollment", "silver start up", "bronze enrollment",
+    "questions on enrollment",
+]
+
+
+def is_first_call_meeting(title):
+    """Return True if the meeting title qualifies as a first strategy call."""
+    if not title:
+        return False
+
+    t = title.strip()
+    tl = t.lower()
+
+    # Step 1: Check exclude-starts
+    for prefix in EXCLUDE_TITLE_STARTS:
+        if tl.startswith(prefix):
+            return False
+
+    # Step 2: Check exclude-contains
+    for pattern in EXCLUDE_TITLE_CONTAINS:
+        if pattern in tl:
+            return False
+
+    # Step 3: Check Anthony Q&A
+    if "anthony" in tl and "q&a" in tl:
+        return False
+
+    # Step 4: Must match an include pattern
+    for regex in INCLUDE_RES:
+        if regex.search(t):
+            return True
+
+    return False
 
 
 # ── API helpers ──────────────────────────────────────────────────────────────
@@ -175,7 +234,99 @@ def is_field_filled(value):
 
 # ── Data fetchers ────────────────────────────────────────────────────────────
 
+def fetch_meetings_today(today_str, user_map):
+    """Fetch meeting activities scheduled for today, filtered by title.
+
+    Uses Close activity/meeting endpoint. Fetches meetings created in the
+    last 60 days and filters by activity_at date matching today in PST.
+    Returns list of qualifying meeting dicts with lead_id and rep info.
+    """
+    # Fetch meetings created recently (covers any meeting scheduled for today)
+    cutoff = (datetime.strptime(today_str, "%Y-%m-%d") - timedelta(days=60)).strftime("%Y-%m-%d")
+
+    all_meetings = []
+    skip = 0
+    limit = 200
+
+    while True:
+        params = {
+            "date_created__gte": cutoff,
+            "_skip": str(skip),
+            "_limit": str(limit),
+        }
+        data = api_get("/activity/meeting/", params)
+        meetings = data.get("data", [])
+        all_meetings.extend(meetings)
+        if not data.get("has_more", False):
+            break
+        skip += limit
+
+    print(f"  Raw meetings fetched (last 60 days): {len(all_meetings)}")
+
+    # Filter to meetings starting today
+    # Check multiple possible date fields
+    today_meetings = []
+    for m in all_meetings:
+        # Try starts_at, then activity_at, then date
+        start = m.get("starts_at", "") or m.get("activity_at", "") or ""
+        if not start:
+            continue
+        # Compare date portion (first 10 chars = YYYY-MM-DD)
+        if start[:10] == today_str:
+            today_meetings.append(m)
+
+    print(f"  Meetings scheduled for today: {len(today_meetings)}")
+
+    # Filter by user exclusion
+    user_filtered = []
+    for m in today_meetings:
+        user_id = m.get("user_id", "")
+        rep_name = user_map.get(user_id, "Unknown")
+        if rep_name in EXCLUDE_USERS:
+            continue
+        user_filtered.append(m)
+
+    print(f"  After user exclusion: {len(user_filtered)}")
+
+    # Filter by title patterns
+    qualified_meetings = []
+    excluded_titles = {"canceled": 0, "follow_up": 0, "qa": 0, "enrollment": 0,
+                       "discovery": 0, "no_match": 0}
+
+    for m in user_filtered:
+        title = m.get("title", "") or m.get("meeting_title", "") or ""
+        if is_first_call_meeting(title):
+            qualified_meetings.append(m)
+        else:
+            # Track why excluded (for debugging)
+            tl = title.lower()
+            if tl.startswith("canceled:"):
+                excluded_titles["canceled"] += 1
+            elif any(p in tl for p in ["follow-up", "follow up", "fallow up", "f/u",
+                                        "next steps", "rescheduled", "reschedule"]):
+                excluded_titles["follow_up"] += 1
+            elif "anthony" in tl and "q&a" in tl:
+                excluded_titles["qa"] += 1
+            elif any(p in tl for p in ["enrollment", "silver start up", "bronze enrollment"]):
+                excluded_titles["enrollment"] += 1
+            elif "vending quick discovery" in tl:
+                excluded_titles["discovery"] += 1
+            else:
+                excluded_titles["no_match"] += 1
+
+    print(f"  Qualifying first-call meetings: {len(qualified_meetings)}")
+    print(f"  Title exclusions: {dict(excluded_titles)}")
+
+    return qualified_meetings
+
+
+def fetch_lead(lead_id):
+    """Fetch a single lead by ID."""
+    return api_get(f"/lead/{lead_id}/")
+
+
 def fetch_closed_won_today(today_str):
+    """Fetch Closed/Won opps where date_won = today."""
     all_opps = []
     skip = 0
     limit = 100
@@ -194,105 +345,6 @@ def fetch_closed_won_today(today_str):
             break
         skip += limit
     return [o for o in all_opps if o.get("pipeline_id") == PIPELINE_ID]
-
-
-def fetch_leads_booked_today(today_str, user_map, name_to_id):
-    query_str = (
-        f'"First Call Booked Date" >= "{today_str}" '
-        f'"First Call Booked Date" <= "{today_str}"'
-    )
-
-    all_leads = []
-    skip = 0
-    limit = 200
-    while True:
-        params = {
-            "query": query_str,
-            "_skip": str(skip),
-            "_limit": str(limit),
-        }
-        data = api_get("/lead/", params)
-        leads = data.get("data", [])
-        all_leads.extend(leads)
-        if not data.get("has_more", False):
-            break
-        skip += limit
-
-    print(f"  Raw leads returned for today: {len(all_leads)}")
-
-    rep_booked = {}
-    rep_shown = {}
-    rep_qualified = {}
-    rep_crm_filled = {}
-    rep_crm_total = {}
-    excluded_count = 0
-
-    for lead in all_leads:
-        lead_status_id = lead.get("status_id", "")
-        if lead_status_id in EXCLUDED_LEAD_STATUSES:
-            excluded_count += 1
-            continue
-
-        custom = lead.get("custom", {})
-        merged = {}
-        merged.update(custom)
-        for k, v in lead.items():
-            if k.startswith("custom."):
-                merged[k] = v
-                merged[k.replace("custom.", "")] = v
-
-        owner_raw = get_custom_value(merged, CF_LEAD_OWNER_ID, CF_LEAD_OWNER_NAME)
-        rep_name = resolve_owner_to_name(owner_raw, user_map, name_to_id)
-
-        if rep_name in EXCLUDE_USERS:
-            continue
-
-        rep_booked[rep_name] = rep_booked.get(rep_name, 0) + 1
-
-        show_up = get_custom_value(merged, CF_FIRST_CALL_SHOW_ID, CF_FIRST_CALL_SHOW_NAME)
-        if str(show_up).strip().lower() == "yes":
-            rep_shown[rep_name] = rep_shown.get(rep_name, 0) + 1
-
-        qualified_val = get_custom_value(merged, CF_QUALIFIED_ID, CF_QUALIFIED_NAME)
-        if str(qualified_val).strip().lower() == "yes":
-            rep_qualified[rep_name] = rep_qualified.get(rep_name, 0) + 1
-
-        # CRM Compliance (4 fields per lead)
-        crm_checks = 0
-        crm_filled = 0
-
-        crm_checks += 1
-        if is_field_filled(show_up):
-            crm_filled += 1
-
-        disposition = get_custom_value(merged, CF_CALL_DISPOSITION_ID, CF_CALL_DISPOSITION_NAME)
-        crm_checks += 1
-        if is_field_filled(disposition):
-            crm_filled += 1
-
-        crm_checks += 1
-        if is_field_filled(qualified_val):
-            crm_filled += 1
-
-        crm_checks += 1
-        opp_confidence_filled = False
-        opportunities = lead.get("opportunities", [])
-        for opp in opportunities:
-            if opp.get("pipeline_id") == PIPELINE_ID:
-                confidence = opp.get("confidence", 0) or 0
-                if confidence > 0:
-                    opp_confidence_filled = True
-                    break
-        if opp_confidence_filled:
-            crm_filled += 1
-
-        rep_crm_filled[rep_name] = rep_crm_filled.get(rep_name, 0) + crm_filled
-        rep_crm_total[rep_name] = rep_crm_total.get(rep_name, 0) + crm_checks
-
-    print(f"  Excluded {excluded_count} leads (Canceled/Outside US)")
-    print(f"  Counting {len(all_leads) - excluded_count} leads after exclusions")
-
-    return rep_booked, rep_shown, rep_qualified, rep_crm_filled, rep_crm_total
 
 
 # ── Main ─────────────────────────────────────────────────────────────────────
@@ -344,13 +396,108 @@ def build_dashboard_data():
             rep_deals[rep_name] = rep_deals.get(rep_name, 0) + 1
             seen_leads.add(lead_key)
 
-    # Step 3: Meeting funnel + CRM compliance for today
-    print("  Fetching leads booked today...")
-    rep_booked, rep_shown, rep_qualified, rep_crm_filled, rep_crm_total = \
-        fetch_leads_booked_today(today_str, user_map, name_to_id)
-    print(f"  Meetings booked today by {len(rep_booked)} reps.")
+    # Step 3: Fetch qualifying meetings for today
+    print("  Fetching meetings for today...")
+    meetings = fetch_meetings_today(today_str, user_map)
 
-    # Step 4: Build per-rep data
+    # Step 4: For each meeting, look up the lead for custom fields
+    print(f"  Looking up {len(meetings)} leads for custom field data...")
+    rep_booked = {}
+    rep_shown = {}
+    rep_qualified = {}
+    rep_crm_filled = {}
+    rep_crm_total = {}
+
+    # Cache leads to avoid duplicate fetches
+    lead_cache = {}
+    leads_seen_per_rep = {}  # track unique lead_ids per rep to avoid double-counting
+
+    for m in meetings:
+        lead_id = m.get("lead_id", "")
+        if not lead_id:
+            continue
+
+        # Fetch lead (with cache)
+        if lead_id not in lead_cache:
+            try:
+                lead_cache[lead_id] = fetch_lead(lead_id)
+            except Exception as e:
+                print(f"    ⚠️ Failed to fetch lead {lead_id}: {e}")
+                continue
+
+        lead = lead_cache[lead_id]
+        custom = lead.get("custom", {})
+
+        # Merge custom fields
+        merged = {}
+        merged.update(custom)
+        for k, v in lead.items():
+            if k.startswith("custom."):
+                merged[k] = v
+                merged[k.replace("custom.", "")] = v
+
+        # Resolve owner
+        owner_raw = get_custom_value(merged, CF_LEAD_OWNER_ID, CF_LEAD_OWNER_NAME)
+        rep_name = resolve_owner_to_name(owner_raw, user_map, name_to_id)
+
+        if rep_name in EXCLUDE_USERS:
+            continue
+
+        # Deduplicate: only count one meeting per lead per rep
+        rep_lead_key = f"{rep_name}:{lead_id}"
+        if rep_lead_key not in leads_seen_per_rep:
+            leads_seen_per_rep[rep_lead_key] = True
+        else:
+            continue
+
+        # Tally booked
+        rep_booked[rep_name] = rep_booked.get(rep_name, 0) + 1
+
+        # Tally shown
+        show_up = get_custom_value(merged, CF_FIRST_CALL_SHOW_ID, CF_FIRST_CALL_SHOW_NAME)
+        if str(show_up).strip().lower() == "yes":
+            rep_shown[rep_name] = rep_shown.get(rep_name, 0) + 1
+
+        # Tally qualified
+        qualified_val = get_custom_value(merged, CF_QUALIFIED_ID, CF_QUALIFIED_NAME)
+        if str(qualified_val).strip().lower() == "yes":
+            rep_qualified[rep_name] = rep_qualified.get(rep_name, 0) + 1
+
+        # CRM Compliance (4 fields per lead)
+        crm_checks = 0
+        crm_filled = 0
+
+        crm_checks += 1
+        if is_field_filled(show_up):
+            crm_filled += 1
+
+        disposition = get_custom_value(merged, CF_CALL_DISPOSITION_ID, CF_CALL_DISPOSITION_NAME)
+        crm_checks += 1
+        if is_field_filled(disposition):
+            crm_filled += 1
+
+        crm_checks += 1
+        if is_field_filled(qualified_val):
+            crm_filled += 1
+
+        crm_checks += 1
+        opp_confidence_filled = False
+        opportunities = lead.get("opportunities", [])
+        for opp in opportunities:
+            if opp.get("pipeline_id") == PIPELINE_ID:
+                confidence = opp.get("confidence", 0) or 0
+                if confidence > 0:
+                    opp_confidence_filled = True
+                    break
+        if opp_confidence_filled:
+            crm_filled += 1
+
+        rep_crm_filled[rep_name] = rep_crm_filled.get(rep_name, 0) + crm_filled
+        rep_crm_total[rep_name] = rep_crm_total.get(rep_name, 0) + crm_checks
+
+    print(f"  Final meeting counts by {len(rep_booked)} reps.")
+
+    # Step 5: Build per-rep data
     all_rep_names = set()
     all_rep_names.update(rep_revenue.keys())
     all_rep_names.update(rep_booked.keys())
@@ -388,7 +535,7 @@ def build_dashboard_data():
 
     reps.sort(key=lambda r: r["booked"], reverse=True)
 
-    # Step 5: Team totals
+    # Step 6: Team totals
     total_booked = sum(r["booked"] for r in reps)
     total_shown = sum(r["shown"] for r in reps)
     total_qualified = sum(r["qualified"] for r in reps)
