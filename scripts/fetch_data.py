@@ -253,92 +253,154 @@ def is_field_filled(value):
 
 # ── Data fetchers ────────────────────────────────────────────────────────────
 
-def fetch_meetings_today(today_str, user_map):
-    """Fetch meeting activities scheduled for today, filtered by title.
-
-    Uses GET /activity/meeting/ with date_created filter to limit results,
-    then filters by activity_at (meeting start time) = today in Python.
-    """
-    # Get meetings created in the last 90 days (covers any meeting scheduled for today)
-    cutoff = (datetime.strptime(today_str, "%Y-%m-%d") - timedelta(days=90)).strftime("%Y-%m-%d")
-
+def fetch_meetings_for_lead(lead_id):
+    """Fetch meeting activities for a specific lead."""
     all_meetings = []
-    cursor = None
-
+    skip = 0
     while True:
-        params = {
-            "date_created__gt": cutoff,
-            "_limit": "200",
-        }
-        if cursor:
-            params["_cursor"] = cursor
-
-        data = api_get("/activity/meeting/", params)
+        data = api_get("/activity/meeting/", {"lead_id": lead_id, "_skip": str(skip), "_limit": "100"})
         meetings = data.get("data", [])
         all_meetings.extend(meetings)
-
-        cursor = data.get("cursor")
-        if not data.get("has_more", False) or not cursor:
+        if not data.get("has_more", False):
             break
+        skip += 100
+    return all_meetings
 
-    print(f"  Total meetings fetched (last 90 days): {len(all_meetings)}")
 
-    # Filter to meetings with activity_at (start time) = today
-    today_meetings = []
-    for m in all_meetings:
-        # activity_at = meeting start time per Close docs
-        activity_at = m.get("activity_at", "") or m.get("starts_at", "") or ""
-        if activity_at[:10] == today_str:
-            today_meetings.append(m)
+def fetch_leads_booked_today(today_str, user_map, name_to_id):
+    """Fetch leads with First Call Booked Date = today using proven lead search.
 
-    print(f"  Meetings scheduled for today: {len(today_meetings)}")
+    Then for each lead, fetch its meetings and check titles to ensure
+    we only count net-new first strategy calls.
 
-    # Filter by user exclusion
-    user_filtered = []
-    for m in today_meetings:
-        user_id = m.get("user_id", "")
-        rep_name = user_map.get(user_id, "Unknown")
-        if rep_name in EXCLUDE_USERS:
+    Returns per-rep: booked, shown, qualified, crm_filled, crm_total
+    """
+    # Step 1: Get leads booked today (proven query format)
+    query_str = (
+        f'"First Call Booked Date" >= "{today_str}" '
+        f'"First Call Booked Date" <= "{today_str}"'
+    )
+
+    all_leads = []
+    skip = 0
+    limit = 200
+    while True:
+        params = {"query": query_str, "_skip": str(skip), "_limit": str(limit)}
+        data = api_get("/lead/", params)
+        leads = data.get("data", [])
+        all_leads.extend(leads)
+        if not data.get("has_more", False):
+            break
+        skip += limit
+
+    print(f"  Leads with First Call Booked today: {len(all_leads)}")
+
+    # Step 2: For each lead, check meeting titles
+    rep_booked = {}
+    rep_shown = {}
+    rep_qualified = {}
+    rep_crm_filled = {}
+    rep_crm_total = {}
+    excluded_status = 0
+    excluded_title = 0
+    excluded_user = 0
+
+    for lead in all_leads:
+        # Exclude by lead status
+        lead_status_id = lead.get("status_id", "")
+        if lead_status_id in EXCLUDED_LEAD_STATUSES:
+            excluded_status += 1
             continue
-        user_filtered.append(m)
 
-    print(f"  After user exclusion: {len(user_filtered)}")
+        # Get lead owner
+        custom = lead.get("custom", {})
+        merged = {}
+        merged.update(custom)
+        for k, v in lead.items():
+            if k.startswith("custom."):
+                merged[k] = v
+                merged[k.replace("custom.", "")] = v
 
-    # Filter by title patterns
-    qualified_meetings = []
-    excluded_titles = {"canceled": 0, "follow_up": 0, "qa": 0, "enrollment": 0,
-                       "discovery": 0, "no_match": 0}
+        owner_raw = get_custom_value(merged, CF_LEAD_OWNER_ID, CF_LEAD_OWNER_NAME)
+        rep_name = resolve_owner_to_name(owner_raw, user_map, name_to_id)
 
-    for m in user_filtered:
-        title = m.get("title", "") or m.get("meeting_title", "") or ""
-        if is_first_call_meeting(title):
-            qualified_meetings.append(m)
-        else:
-            # Track why excluded (for debugging)
-            tl = title.lower()
-            if tl.startswith("canceled:"):
-                excluded_titles["canceled"] += 1
-            elif any(p in tl for p in ["follow-up", "follow up", "fallow up", "f/u",
-                                        "next steps", "rescheduled", "reschedule"]):
-                excluded_titles["follow_up"] += 1
-            elif "anthony" in tl and "q&a" in tl:
-                excluded_titles["qa"] += 1
-            elif any(p in tl for p in ["enrollment", "silver start up", "bronze enrollment"]):
-                excluded_titles["enrollment"] += 1
-            elif "vending quick discovery" in tl:
-                excluded_titles["discovery"] += 1
-            else:
-                excluded_titles["no_match"] += 1
+        if rep_name in EXCLUDE_USERS:
+            excluded_user += 1
+            continue
 
-    print(f"  Qualifying first-call meetings: {len(qualified_meetings)}")
-    print(f"  Title exclusions: {dict(excluded_titles)}")
+        # Fetch this lead's meetings and check if any today match title patterns
+        lead_id = lead.get("id", "")
+        try:
+            meetings = fetch_meetings_for_lead(lead_id)
+        except Exception as e:
+            print(f"    ⚠️ Failed to fetch meetings for lead {lead_id}: {e}")
+            meetings = []
 
-    return qualified_meetings
+        # Find meetings scheduled for today with qualifying titles
+        has_qualifying_meeting = False
+        for m in meetings:
+            activity_at = m.get("activity_at", "") or m.get("starts_at", "") or ""
+            if activity_at[:10] != today_str:
+                continue
+            title = m.get("title", "") or ""
+            if is_first_call_meeting(title):
+                has_qualifying_meeting = True
+                break
 
+        if not has_qualifying_meeting:
+            excluded_title += 1
+            continue
 
-def fetch_lead(lead_id):
-    """Fetch a single lead by ID."""
-    return api_get(f"/lead/{lead_id}/")
+        # Count this lead
+        rep_booked[rep_name] = rep_booked.get(rep_name, 0) + 1
+
+        # Shown
+        show_up = get_custom_value(merged, CF_FIRST_CALL_SHOW_ID, CF_FIRST_CALL_SHOW_NAME)
+        if str(show_up).strip().lower() == "yes":
+            rep_shown[rep_name] = rep_shown.get(rep_name, 0) + 1
+
+        # Qualified
+        qualified_val = get_custom_value(merged, CF_QUALIFIED_ID, CF_QUALIFIED_NAME)
+        if str(qualified_val).strip().lower() == "yes":
+            rep_qualified[rep_name] = rep_qualified.get(rep_name, 0) + 1
+
+        # CRM Compliance (4 fields per lead)
+        crm_checks = 0
+        crm_filled = 0
+
+        crm_checks += 1
+        if is_field_filled(show_up):
+            crm_filled += 1
+
+        disposition = get_custom_value(merged, CF_CALL_DISPOSITION_ID, CF_CALL_DISPOSITION_NAME)
+        crm_checks += 1
+        if is_field_filled(disposition):
+            crm_filled += 1
+
+        crm_checks += 1
+        if is_field_filled(qualified_val):
+            crm_filled += 1
+
+        crm_checks += 1
+        opp_confidence_filled = False
+        opportunities = lead.get("opportunities", [])
+        for opp in opportunities:
+            if opp.get("pipeline_id") == PIPELINE_ID:
+                confidence = opp.get("confidence", 0) or 0
+                if confidence > 0:
+                    opp_confidence_filled = True
+                    break
+        if opp_confidence_filled:
+            crm_filled += 1
+
+        rep_crm_filled[rep_name] = rep_crm_filled.get(rep_name, 0) + crm_filled
+        rep_crm_total[rep_name] = rep_crm_total.get(rep_name, 0) + crm_checks
+
+    print(f"  Excluded: {excluded_status} by status, {excluded_user} by user, {excluded_title} by title")
+    qualifying = sum(rep_booked.values())
+    print(f"  Qualifying first-call meetings: {qualifying}")
+
+    return rep_booked, rep_shown, rep_qualified, rep_crm_filled, rep_crm_total
 
 
 def fetch_closed_won_today(today_str):
@@ -412,108 +474,13 @@ def build_dashboard_data():
             rep_deals[rep_name] = rep_deals.get(rep_name, 0) + 1
             seen_leads.add(lead_key)
 
-    # Step 3: Fetch qualifying meetings for today
-    print("  Fetching meetings for today...")
-    meetings = fetch_meetings_today(today_str, user_map)
+    # Step 3: Meeting funnel + CRM compliance for today (hybrid: lead search + title check)
+    print("  Fetching leads booked today + checking meeting titles...")
+    rep_booked, rep_shown, rep_qualified, rep_crm_filled, rep_crm_total = \
+        fetch_leads_booked_today(today_str, user_map, name_to_id)
+    print(f"  Meetings booked today by {len(rep_booked)} reps.")
 
-    # Step 4: For each meeting, look up the lead for custom fields
-    print(f"  Looking up {len(meetings)} leads for custom field data...")
-    rep_booked = {}
-    rep_shown = {}
-    rep_qualified = {}
-    rep_crm_filled = {}
-    rep_crm_total = {}
-
-    # Cache leads to avoid duplicate fetches
-    lead_cache = {}
-    leads_seen_per_rep = {}  # track unique lead_ids per rep to avoid double-counting
-
-    for m in meetings:
-        lead_id = m.get("lead_id", "")
-        if not lead_id:
-            continue
-
-        # Fetch lead (with cache)
-        if lead_id not in lead_cache:
-            try:
-                lead_cache[lead_id] = fetch_lead(lead_id)
-            except Exception as e:
-                print(f"    ⚠️ Failed to fetch lead {lead_id}: {e}")
-                continue
-
-        lead = lead_cache[lead_id]
-        custom = lead.get("custom", {})
-
-        # Merge custom fields
-        merged = {}
-        merged.update(custom)
-        for k, v in lead.items():
-            if k.startswith("custom."):
-                merged[k] = v
-                merged[k.replace("custom.", "")] = v
-
-        # Resolve owner
-        owner_raw = get_custom_value(merged, CF_LEAD_OWNER_ID, CF_LEAD_OWNER_NAME)
-        rep_name = resolve_owner_to_name(owner_raw, user_map, name_to_id)
-
-        if rep_name in EXCLUDE_USERS:
-            continue
-
-        # Deduplicate: only count one meeting per lead per rep
-        rep_lead_key = f"{rep_name}:{lead_id}"
-        if rep_lead_key not in leads_seen_per_rep:
-            leads_seen_per_rep[rep_lead_key] = True
-        else:
-            continue
-
-        # Tally booked
-        rep_booked[rep_name] = rep_booked.get(rep_name, 0) + 1
-
-        # Tally shown
-        show_up = get_custom_value(merged, CF_FIRST_CALL_SHOW_ID, CF_FIRST_CALL_SHOW_NAME)
-        if str(show_up).strip().lower() == "yes":
-            rep_shown[rep_name] = rep_shown.get(rep_name, 0) + 1
-
-        # Tally qualified
-        qualified_val = get_custom_value(merged, CF_QUALIFIED_ID, CF_QUALIFIED_NAME)
-        if str(qualified_val).strip().lower() == "yes":
-            rep_qualified[rep_name] = rep_qualified.get(rep_name, 0) + 1
-
-        # CRM Compliance (4 fields per lead)
-        crm_checks = 0
-        crm_filled = 0
-
-        crm_checks += 1
-        if is_field_filled(show_up):
-            crm_filled += 1
-
-        disposition = get_custom_value(merged, CF_CALL_DISPOSITION_ID, CF_CALL_DISPOSITION_NAME)
-        crm_checks += 1
-        if is_field_filled(disposition):
-            crm_filled += 1
-
-        crm_checks += 1
-        if is_field_filled(qualified_val):
-            crm_filled += 1
-
-        crm_checks += 1
-        opp_confidence_filled = False
-        opportunities = lead.get("opportunities", [])
-        for opp in opportunities:
-            if opp.get("pipeline_id") == PIPELINE_ID:
-                confidence = opp.get("confidence", 0) or 0
-                if confidence > 0:
-                    opp_confidence_filled = True
-                    break
-        if opp_confidence_filled:
-            crm_filled += 1
-
-        rep_crm_filled[rep_name] = rep_crm_filled.get(rep_name, 0) + crm_filled
-        rep_crm_total[rep_name] = rep_crm_total.get(rep_name, 0) + crm_checks
-
-    print(f"  Final meeting counts by {len(rep_booked)} reps.")
-
-    # Step 5: Build per-rep data
+    # Step 4: Build per-rep data
     all_rep_names = set()
     all_rep_names.update(rep_revenue.keys())
     all_rep_names.update(rep_booked.keys())
