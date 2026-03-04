@@ -260,17 +260,13 @@ def is_field_filled(value):
 # ── Data fetchers ────────────────────────────────────────────────────────────
 
 def fetch_meetings_for_lead(lead_id):
-    """Fetch meeting activities for a specific lead."""
-    all_meetings = []
-    skip = 0
-    while True:
-        data = api_get("/activity/meeting/", {"lead_id": lead_id, "_skip": str(skip), "_limit": "100"})
-        meetings = data.get("data", [])
-        all_meetings.extend(meetings)
-        if not data.get("has_more", False):
-            break
-        skip += 100
-    return all_meetings
+    """Fetch meeting activities for a specific lead.
+    
+    Uses only the documented lead_id parameter — no _skip/_limit
+    which cause 400 errors on this endpoint.
+    """
+    data = api_get("/activity/meeting/", {"lead_id": lead_id})
+    return data.get("data", [])
 
 
 def fetch_leads_booked_today(today_str, user_map, name_to_id):
@@ -355,6 +351,15 @@ def fetch_leads_booked_today(today_str, user_map, name_to_id):
 
         if not has_qualifying_meeting:
             excluded_title += 1
+            # Debug: show what titles were found for today
+            today_titles = [
+                m.get("title", "")
+                for m in meetings
+                if (m.get("activity_at", "") or "")[:10] == today_str
+            ]
+            if today_titles:
+                lead_name = lead.get("display_name", "") or lead.get("name", "")
+                print(f"    Title excluded ({rep_name} / {lead_name}): {today_titles}")
             continue
 
         # Count this lead
