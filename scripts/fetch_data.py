@@ -214,7 +214,16 @@ def fetch_all_meetings_for_today(today_str):
 
     Close API date filters on /activity/meeting are silently ignored,
     so we must fetch everything and filter locally.
+
+    IMPORTANT: starts_at is in UTC. A 4pm PST meeting = midnight UTC next day.
+    Must convert to PST before comparing dates.
     """
+    try:
+        from zoneinfo import ZoneInfo
+        pst = ZoneInfo("America/Los_Angeles")
+    except ImportError:
+        pst = timezone(timedelta(hours=-8))
+
     all_meetings = []
     skip = 0
     limit = 100
@@ -233,14 +242,25 @@ def fetch_all_meetings_for_today(today_str):
 
     print(f"  Total meetings in org: {len(all_meetings)}", flush=True)
 
-    # Filter to today by starts_at / activity_at
+    # Filter to today — convert UTC timestamps to PST before comparing
     today_meetings = []
     for m in all_meetings:
         start = m.get("starts_at") or m.get("activity_at") or ""
-        if start[:10] == today_str:
-            today_meetings.append(m)
+        if not start:
+            continue
+        try:
+            # Parse ISO datetime and convert to PST
+            dt_str = start.replace("Z", "+00:00")
+            dt = datetime.fromisoformat(dt_str)
+            dt_pst = dt.astimezone(pst)
+            if dt_pst.strftime("%Y-%m-%d") == today_str:
+                today_meetings.append(m)
+        except (ValueError, TypeError):
+            # Fallback: raw string comparison
+            if start[:10] == today_str:
+                today_meetings.append(m)
 
-    print(f"  Meetings scheduled for today: {len(today_meetings)}", flush=True)
+    print(f"  Meetings scheduled for today (PST): {len(today_meetings)}", flush=True)
     return today_meetings
 
 
@@ -265,12 +285,16 @@ def classify_meetings(meetings, user_map):
 
         # Title classification
         title = m.get("title", "") or ""
-        if is_first_call_meeting(title):
+
+        if not title.strip():
+            # Blank title — likely GCal sync issue. Count it (not a follow-up/canceled).
+            qualifying.append(m)
+            print(f"    Blank title included ({rep_name}, lead={m.get('lead_id', '?')})", flush=True)
+        elif is_first_call_meeting(title):
             qualifying.append(m)
         else:
             excluded_title += 1
-            if title:
-                print(f"    Excluded title ({rep_name}): {title}", flush=True)
+            print(f"    Excluded title ({rep_name}): {title}", flush=True)
 
     print(f"  User excluded: {excluded_user}", flush=True)
     print(f"  Title excluded: {excluded_title}", flush=True)
