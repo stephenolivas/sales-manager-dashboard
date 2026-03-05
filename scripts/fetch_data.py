@@ -1,14 +1,21 @@
 #!/usr/bin/env python3
 """
-Fetch DAILY rep-level metrics from Close CRM.
+Fetch WEEK-TO-DATE rep-level metrics from Close CRM.
 Writes data.json for the GitHub Pages dashboard.
 
-Strategy (proven to work with Close API):
+Strategy:
   1. Paginate ALL meetings from /activity/meeting with _skip/_limit=100
-  2. Filter to today's date in Python (date filters are silently ignored by Close)
+  2. Filter to current week (Monday through today PST) in Python
   3. Classify titles in Python (include/exclude patterns)
   4. Fetch lead data only for meetings that survive filtering (with _fields)
-  5. Separately fetch Closed/Won opps for today
+  5. Separately fetch Closed/Won opps for the week
+
+Weekly targets per rep:
+  Meetings Booked: 20    Close Rate: 30%
+  Meetings Shown: 15     QA Score: >7 (TBD)
+  Opps Qualified: 10     Avg/Deal: $8k
+  Opps Closed Won: 3     CRM Compliance: 100%
+  Revenue Booked: $24k   Task Adherence: 100% (TBD)
 """
 
 import json
@@ -39,7 +46,7 @@ CF_LEAD_OWNER_ID           = "cf_gOfS9pFwext58oberEegLyix8hZzeHrxhCZOVh3P3rd"
 CF_QUALIFIED_ID            = "cf_ZDx7NBQaDzV1yYrFcBMzt6cIYj81dAcswpNN0CQzCPS"
 CF_CALL_DISPOSITION_ID     = "cf_n2QvikNfeZ0uWObMsyCJmnXnrbWNLGlSvYiKJTwxTqU"
 
-# Fields to request when fetching individual leads (keeps response small)
+# Fields to request when fetching individual leads
 LEAD_FIELDS = ",".join([
     "id", "display_name", "status_id",
     f"custom.{CF_FIRST_CALL_SHOW_ID}",
@@ -49,12 +56,13 @@ LEAD_FIELDS = ",".join([
     "opportunities",
 ])
 
-DAILY_TARGETS = {
-    "booked": 4,
-    "shown": 3,
-    "qualified": 2,
-    "deals": 1,
-    "revenue": 5000,
+# Weekly targets (per rep)
+WEEKLY_TARGETS = {
+    "booked": 20,
+    "shown": 15,
+    "qualified": 10,
+    "deals": 3,
+    "revenue": 24000,
     "close_rate": 30,
     "qa_score": 7,
     "avg_rev_per_deal": 8000,
@@ -110,34 +118,24 @@ EXCLUDE_TITLE_CONTAINS = [
 
 
 def is_first_call_meeting(title):
-    """Return True if the meeting title qualifies as a first strategy call."""
     if not title:
         return False
     t = title.strip()
     tl = t.lower()
-
-    # Exclude: starts with "Canceled:"
     if tl.startswith("canceled:"):
         return False
-
-    # Exclude: contains any exclude pattern
     for pattern in EXCLUDE_TITLE_CONTAINS:
         if pattern in tl:
             return False
-
-    # Exclude: Anthony Q&A
     if "anthony" in tl and "q&a" in tl:
         return False
-
-    # Must match an include pattern
     for regex in INCLUDE_PATTERNS:
         if regex.search(t):
             return True
-
     return False
 
 
-# ── API helpers (using requests.Session for connection reuse) ────────────────
+# ── API helpers ──────────────────────────────────────────────────────────────
 
 session = None
 
@@ -150,10 +148,9 @@ def init_session():
 
 
 def api_get(endpoint, params=None):
-    """GET with rate limit handling and retry logic."""
     url = f"{BASE_URL}{endpoint}"
     for attempt in range(5):
-        time.sleep(0.5)  # Global throttle: ~120 req/min
+        time.sleep(0.5)
         resp = session.get(url, params=params or {})
         if resp.status_code == 429:
             retry_after = int(resp.headers.get("Retry-After", 5))
@@ -177,7 +174,6 @@ def fetch_org_users():
 
 
 def resolve_owner(raw_owner, user_map, name_to_id):
-    """Resolve Lead Owner field (user_id, name, or dict) to rep name."""
     if not raw_owner:
         return "Unknown"
     if isinstance(raw_owner, dict):
@@ -207,22 +203,32 @@ def is_field_filled(value):
     return True
 
 
-# ── Step 1: Fetch ALL meetings, filter to today in Python ────────────────────
+# ── Week helpers ─────────────────────────────────────────────────────────────
 
-def fetch_all_meetings_for_today(today_str):
-    """Paginate all meetings, filter to today's date in Python.
+def get_week_range(now_pst):
+    """Get Monday through today (PST) as date strings."""
+    today = now_pst.date()
+    # Monday = 0, so weekday() gives days since Monday
+    monday = today - timedelta(days=today.weekday())
+    dates = []
+    d = monday
+    while d <= today:
+        dates.append(d.strftime("%Y-%m-%d"))
+        d += timedelta(days=1)
+    return monday.strftime("%Y-%m-%d"), today.strftime("%Y-%m-%d"), dates
 
-    Close API date filters on /activity/meeting are silently ignored,
-    so we must fetch everything and filter locally.
 
-    IMPORTANT: starts_at is in UTC. A 4pm PST meeting = midnight UTC next day.
-    Must convert to PST before comparing dates.
-    """
+# ── Step 1: Fetch ALL meetings, filter to this week in Python ────────────────
+
+def fetch_all_meetings_for_week(week_dates):
+    """Paginate all meetings, filter to this week's dates (PST)."""
     try:
         from zoneinfo import ZoneInfo
         pst = ZoneInfo("America/Los_Angeles")
     except ImportError:
         pst = timezone(timedelta(hours=-8))
+
+    week_set = set(week_dates)
 
     all_meetings = []
     skip = 0
@@ -242,59 +248,48 @@ def fetch_all_meetings_for_today(today_str):
 
     print(f"  Total meetings in org: {len(all_meetings)}", flush=True)
 
-    # Filter to today — convert UTC timestamps to PST before comparing
-    today_meetings = []
+    # Filter to this week — convert UTC timestamps to PST
+    week_meetings = []
     for m in all_meetings:
         start = m.get("starts_at") or m.get("activity_at") or ""
         if not start:
             continue
         try:
-            # Parse ISO datetime and convert to PST
             dt_str = start.replace("Z", "+00:00")
             dt = datetime.fromisoformat(dt_str)
             dt_pst = dt.astimezone(pst)
-            if dt_pst.strftime("%Y-%m-%d") == today_str:
-                today_meetings.append(m)
+            if dt_pst.strftime("%Y-%m-%d") in week_set:
+                week_meetings.append(m)
         except (ValueError, TypeError):
-            # Fallback: raw string comparison
-            if start[:10] == today_str:
-                today_meetings.append(m)
+            if start[:10] in week_set:
+                week_meetings.append(m)
 
-    print(f"  Meetings scheduled for today (PST): {len(today_meetings)}", flush=True)
-    return today_meetings
+    print(f"  Meetings this week (Mon-today): {len(week_meetings)}", flush=True)
+    return week_meetings
 
 
 # ── Step 2: Classify by user + title ─────────────────────────────────────────
 
 def classify_meetings(meetings, user_map):
-    """Filter meetings by user exclusion and title patterns.
-
-    Returns list of qualifying meetings.
-    """
     excluded_user = 0
     excluded_title = 0
     qualifying = []
 
     for m in meetings:
-        # User exclusion
         user_id = m.get("user_id", "")
         rep_name = user_map.get(user_id, "Unknown")
         if rep_name in EXCLUDE_USERS:
             excluded_user += 1
             continue
 
-        # Title classification
         title = m.get("title", "") or ""
 
         if not title.strip():
-            # Blank title — likely GCal sync issue. Count it (not a follow-up/canceled).
             qualifying.append(m)
-            print(f"    Blank title included ({rep_name}, lead={m.get('lead_id', '?')})", flush=True)
         elif is_first_call_meeting(title):
             qualifying.append(m)
         else:
             excluded_title += 1
-            print(f"    Excluded title ({rep_name}): {title}", flush=True)
 
     print(f"  User excluded: {excluded_user}", flush=True)
     print(f"  Title excluded: {excluded_title}", flush=True)
@@ -305,17 +300,12 @@ def classify_meetings(meetings, user_map):
 # ── Step 3: Fetch lead data for qualifying meetings ──────────────────────────
 
 def fetch_leads_for_meetings(meetings, user_map, name_to_id):
-    """For each qualifying meeting, fetch its lead and tally metrics.
-
-    Returns: rep_booked, rep_shown, rep_qualified, rep_crm_filled, rep_crm_total
-    """
     rep_booked = {}
     rep_shown = {}
     rep_qualified = {}
     rep_crm_filled = {}
     rep_crm_total = {}
 
-    # Deduplicate by lead_id (one count per lead)
     seen_leads = set()
     lead_cache = {}
     fetch_errors = 0
@@ -326,7 +316,6 @@ def fetch_leads_for_meetings(meetings, user_map, name_to_id):
             continue
         seen_leads.add(lead_id)
 
-        # Fetch lead with _fields to keep response small
         if lead_id not in lead_cache:
             try:
                 lead_data = api_get(f"/lead/{lead_id}/", {"_fields": LEAD_FIELDS})
@@ -338,18 +327,16 @@ def fetch_leads_for_meetings(meetings, user_map, name_to_id):
 
         lead = lead_cache[lead_id]
 
-        # Exclude by lead status
         status_id = lead.get("status_id", "")
         if status_id in EXCLUDED_LEAD_STATUSES:
             continue
 
-        # Get custom fields (returned as custom.cf_XXX keys with _fields param)
+        # Custom fields
         show_up = lead.get(f"custom.{CF_FIRST_CALL_SHOW_ID}", "")
         owner_raw = lead.get(f"custom.{CF_LEAD_OWNER_ID}", "")
         qualified_val = lead.get(f"custom.{CF_QUALIFIED_ID}", "")
         disposition = lead.get(f"custom.{CF_CALL_DISPOSITION_ID}", "")
 
-        # Also check nested custom dict (Close returns both sometimes)
         custom = lead.get("custom", {})
         if not show_up:
             show_up = custom.get(CF_FIRST_CALL_SHOW_ID, "")
@@ -364,21 +351,17 @@ def fetch_leads_for_meetings(meetings, user_map, name_to_id):
         if rep_name in EXCLUDE_USERS:
             continue
 
-        # Tally booked
         rep_booked[rep_name] = rep_booked.get(rep_name, 0) + 1
 
-        # Tally shown
         if str(show_up).strip().lower() == "yes":
             rep_shown[rep_name] = rep_shown.get(rep_name, 0) + 1
 
-        # Tally qualified
         if str(qualified_val).strip().lower() == "yes":
             rep_qualified[rep_name] = rep_qualified.get(rep_name, 0) + 1
 
         # CRM Compliance: 4 fields per lead
         crm_checks = 4
         crm_filled = 0
-
         if is_field_filled(show_up):
             crm_filled += 1
         if is_field_filled(disposition):
@@ -386,7 +369,6 @@ def fetch_leads_for_meetings(meetings, user_map, name_to_id):
         if is_field_filled(qualified_val):
             crm_filled += 1
 
-        # Opp confidence > 0
         opp_confidence_filled = False
         for opp in lead.get("opportunities", []):
             if opp.get("pipeline_id") == PIPELINE_ID:
@@ -406,15 +388,15 @@ def fetch_leads_for_meetings(meetings, user_map, name_to_id):
     return rep_booked, rep_shown, rep_qualified, rep_crm_filled, rep_crm_total
 
 
-# ── Step 4: Fetch Closed/Won opps for today ──────────────────────────────────
+# ── Step 4: Fetch Closed/Won opps for the week ──────────────────────────────
 
-def fetch_closed_won_today(today_str):
+def fetch_closed_won_week(monday_str, today_str):
     all_opps = []
     skip = 0
     while True:
         data = api_get("/opportunity/", {
             "status_id": CLOSED_WON_STATUS_ID,
-            "date_won__gte": today_str,
+            "date_won__gte": monday_str,
             "date_won__lte": today_str,
             "_skip": skip,
             "_limit": 100,
@@ -445,7 +427,10 @@ def build_dashboard_data():
     now = now_utc.astimezone(pst)
     today_str = now.strftime("%Y-%m-%d")
 
-    print(f"Fetching DAILY data for {today_str} (PST)...", flush=True)
+    monday_str, today_str, week_dates = get_week_range(now)
+    day_of_week = now.date().weekday() + 1  # 1=Mon, 5=Fri
+
+    print(f"Fetching WTD data: {monday_str} through {today_str} (day {day_of_week} of week)...", flush=True)
 
     # Users
     print("  Fetching org users...", flush=True)
@@ -453,10 +438,10 @@ def build_dashboard_data():
     name_to_id = {v: k for k, v in user_map.items()}
     print(f"  Found {len(user_map)} users.", flush=True)
 
-    # Closed/Won opps today
-    print("  Fetching Closed/Won opportunities for today...", flush=True)
-    opps = fetch_closed_won_today(today_str)
-    print(f"  Found {len(opps)} Closed/Won opportunities today.", flush=True)
+    # Closed/Won opps this week
+    print("  Fetching Closed/Won opportunities for the week...", flush=True)
+    opps = fetch_closed_won_week(monday_str, today_str)
+    print(f"  Found {len(opps)} Closed/Won opportunities this week.", flush=True)
 
     rep_revenue = {}
     rep_deals = {}
@@ -475,12 +460,12 @@ def build_dashboard_data():
             rep_deals[rep_name] = rep_deals.get(rep_name, 0) + 1
             seen_opp_leads.add(lead_key)
 
-    # Meetings: fetch all → filter to today → classify titles → fetch leads
+    # Meetings: fetch all → filter to this week → classify → fetch leads
     print("  Fetching all meetings (paginated)...", flush=True)
-    today_meetings = fetch_all_meetings_for_today(today_str)
+    week_meetings = fetch_all_meetings_for_week(week_dates)
 
     print("  Classifying by user + title...", flush=True)
-    qualifying = classify_meetings(today_meetings, user_map)
+    qualifying = classify_meetings(week_meetings, user_map)
 
     print(f"  Fetching lead data for {len(qualifying)} qualifying meetings...", flush=True)
     rep_booked, rep_shown, rep_qualified, rep_crm_filled, rep_crm_total = \
@@ -534,11 +519,18 @@ def build_dashboard_data():
     total_crm_total = sum(r["crm_total"] for r in reps)
     total_avg_rev = round(total_revenue / total_deals, 2) if total_deals > 0 else None
 
+    # Week label: "Mar 2 – Mar 7, 2026"
+    mon_dt = datetime.strptime(monday_str, "%Y-%m-%d")
+    fri_dt = mon_dt + timedelta(days=4)
+    week_label = f"{mon_dt.strftime('%b %d')} – {fri_dt.strftime('%b %d, %Y')}"
+
     return {
         "updated_at": now.strftime("%Y-%m-%d %I:%M %p PST"),
-        "date_label": now.strftime("%A, %B %d, %Y"),
-        "date_str": today_str,
-        "targets": DAILY_TARGETS,
+        "week_label": week_label,
+        "monday_str": monday_str,
+        "today_str": today_str,
+        "day_of_week": day_of_week,
+        "targets": WEEKLY_TARGETS,
         "total_booked": total_booked,
         "total_shown": total_shown,
         "total_qualified": total_qualified,
@@ -561,16 +553,15 @@ if __name__ == "__main__":
     with open(output_path, "w") as f:
         json.dump(data, f, indent=2)
 
-    # ── Daily archive: save snapshot for today ───────────────────────────
+    # ── Daily archive: save snapshot ─────────────────────────────────────
     archive_dir = os.path.join(repo_root, "archives")
     os.makedirs(archive_dir, exist_ok=True)
 
-    date_str = data["date_str"]  # e.g. "2026-03-04"
+    date_str = data["today_str"]
     archive_path = os.path.join(archive_dir, f"data_{date_str}.json")
     with open(archive_path, "w") as f:
         json.dump(data, f, indent=2)
 
-    # Update archives/index.json with list of available dates
     index_path = os.path.join(archive_dir, "index.json")
     try:
         with open(index_path, "r") as f:
@@ -580,7 +571,7 @@ if __name__ == "__main__":
 
     if date_str not in index_data["dates"]:
         index_data["dates"].append(date_str)
-        index_data["dates"].sort(reverse=True)  # newest first
+        index_data["dates"].sort(reverse=True)
 
     with open(index_path, "w") as f:
         json.dump(index_data, f, indent=2)
