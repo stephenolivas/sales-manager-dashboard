@@ -568,6 +568,10 @@ if __name__ == "__main__":
         with open(index_path, "r") as f:
             index_data = json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
+        index_data = {}
+
+    # Migrate from old daily format if needed
+    if "weeks" not in index_data:
         index_data = {"weeks": []}
 
     if monday_str not in index_data["weeks"]:
