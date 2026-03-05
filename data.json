@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-03-05 10:56 AM PST",
+  "updated_at": "2026-03-05 11:21 AM PST",
   "week_label": "Mar 02 \u2013 Mar 06, 2026",
   "monday_str": "2026-03-02",
   "today_str": "2026-03-05",
@@ -26,22 +26,6 @@
   "team_crm_compliance": 64.2,
   "reps": [
     {
-      "name": "Robin Perkins",
-      "booked": 16,
-      "shown": 10,
-      "qualified": 7,
-      "deals": 5,
-      "revenue": 43985.0,
-      "close_rate": 31.2,
-      "qa_score": null,
-      "avg_rev_per_deal": 8797.0,
-      "crm_compliance": 75.0,
-      "crm_filled": 48,
-      "crm_total": 64,
-      "task_adherence": null,
-      "is_manager": false
-    },
-    {
       "name": "Chris Wanke",
       "booked": 16,
       "shown": 6,
@@ -53,6 +37,22 @@
       "avg_rev_per_deal": 10997.0,
       "crm_compliance": 53.1,
       "crm_filled": 34,
+      "crm_total": 64,
+      "task_adherence": null,
+      "is_manager": false
+    },
+    {
+      "name": "Robin Perkins",
+      "booked": 16,
+      "shown": 10,
+      "qualified": 7,
+      "deals": 5,
+      "revenue": 43985.0,
+      "close_rate": 31.2,
+      "qa_score": null,
+      "avg_rev_per_deal": 8797.0,
+      "crm_compliance": 75.0,
+      "crm_filled": 48,
       "crm_total": 64,
       "task_adherence": null,
       "is_manager": false
