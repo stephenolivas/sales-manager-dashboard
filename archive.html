@@ -3,212 +3,70 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Daily Rep Metrics — Archive</title>
+    <title>Weekly Rep Metrics — Archive</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg: #f4f5f7;
-            --surface: #ffffff;
-            --text: #1a1d23;
-            --text-secondary: #5f6577;
-            --text-muted: #9ca0ad;
-            --border: #e5e7ec;
-            --accent: #2563eb;
-            --accent-light: #eff4ff;
-            --green: #16a34a;
-            --amber: #d97706;
-            --red: #dc2626;
-            --teal: #0d9488;
-            --teal-bg: #f0fdfa;
-            --purple: #7c3aed;
-            --purple-bg: #f5f3ff;
+            --bg: #f4f5f7; --surface: #ffffff; --text: #1a1d23;
+            --text-secondary: #5f6577; --text-muted: #9ca0ad; --border: #e5e7ec;
+            --accent: #2563eb; --accent-light: #eff4ff;
+            --green: #16a34a; --amber: #d97706; --red: #dc2626;
+            --teal: #0d9488; --teal-bg: #f0fdfa;
             --radius: 12px;
             --shadow: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06);
             --shadow-md: 0 4px 12px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04);
         }
-
         * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Plus Jakarta Sans', -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; -webkit-font-smoothing: antialiased; }
 
-        body {
-            font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            line-height: 1.5;
-            -webkit-font-smoothing: antialiased;
-        }
-
-        .header {
-            background: var(--surface);
-            border-bottom: 1px solid var(--border);
-            padding: 20px 32px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-
+        .header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 20px 32px; display: flex; align-items: center; justify-content: space-between; }
         .header-left { display: flex; align-items: center; gap: 16px; }
-
-        .header-icon {
-            width: 38px; height: 38px;
-            background: var(--accent); border-radius: 10px;
-            display: flex; align-items: center; justify-content: center;
-        }
-
+        .header-icon { width: 38px; height: 38px; background: var(--accent); border-radius: 10px; display: flex; align-items: center; justify-content: center; }
         .header-icon svg { width: 20px; height: 20px; fill: white; }
-
         .header h1 { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; }
         .header h1 span { color: var(--text-secondary); font-weight: 500; }
-
-        .header-right { display: flex; align-items: center; gap: 16px; }
-
-        .back-link {
-            color: var(--accent);
-            text-decoration: none;
-            font-size: 13px;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
-
+        .back-link { color: var(--accent); text-decoration: none; font-size: 13px; font-weight: 600; }
         .back-link:hover { text-decoration: underline; }
 
         .content { max-width: 900px; margin: 0 auto; padding: 32px; }
 
-        .section {
-            background: var(--surface);
-            border-radius: var(--radius);
-            border: 1px solid var(--border);
-            box-shadow: var(--shadow);
-            margin-bottom: 20px;
-            overflow: hidden;
-        }
+        .section { background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border); box-shadow: var(--shadow); margin-bottom: 20px; overflow: hidden; }
+        .section-header { padding: 16px 24px; border-bottom: 1px solid var(--border); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); background: var(--accent-light); }
 
-        .section-header {
-            padding: 16px 24px;
-            border-bottom: 1px solid var(--border);
-            font-size: 12px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.06em;
-            color: var(--accent);
-            background: var(--accent-light);
-        }
+        .week-item { display: flex; align-items: center; justify-content: space-between; padding: 14px 24px; border-bottom: 1px solid #f0f1f3; cursor: pointer; transition: background 0.1s; }
+        .week-item:last-child { border-bottom: none; }
+        .week-item:hover { background: #f8f9fb; }
+        .week-item a { color: var(--text); text-decoration: none; font-weight: 600; font-size: 14px; flex: 1; }
+        .week-item a:hover { color: var(--accent); }
+        .week-item .meta { color: var(--text-muted); font-size: 12px; }
 
-        .date-list { padding: 0; }
+        .empty { padding: 40px 24px; text-align: center; color: var(--text-muted); font-size: 14px; }
+        .footer { text-align: center; padding: 20px; color: var(--text-muted); font-size: 12px; }
 
-        .date-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 14px 24px;
-            border-bottom: 1px solid #f0f1f3;
-            cursor: pointer;
-            transition: background 0.1s;
-        }
-
-        .date-item:last-child { border-bottom: none; }
-        .date-item:hover { background: #f8f9fb; }
-
-        .date-item a {
-            color: var(--text);
-            text-decoration: none;
-            font-weight: 600;
-            font-size: 14px;
-            flex: 1;
-        }
-
-        .date-item a:hover { color: var(--accent); }
-
-        .date-item .meta {
-            color: var(--text-muted);
-            font-size: 12px;
-        }
-
-        .empty {
-            padding: 40px 24px;
-            text-align: center;
-            color: var(--text-muted);
-            font-size: 14px;
-        }
-
-        .footer {
-            text-align: center;
-            padding: 20px;
-            color: var(--text-muted);
-            font-size: 12px;
-        }
-
-        /* Selected date view */
-        .snapshot-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 16px 24px;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .snapshot-title {
-            font-size: 15px;
-            font-weight: 700;
-        }
-
-        .snapshot-back {
-            color: var(--accent);
-            text-decoration: none;
-            font-size: 13px;
-            font-weight: 600;
-            cursor: pointer;
-        }
-
+        .snapshot-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 24px; border-bottom: 1px solid var(--border); }
+        .snapshot-title { font-size: 15px; font-weight: 700; }
+        .snapshot-back { color: var(--accent); text-decoration: none; font-size: 13px; font-weight: 600; cursor: pointer; }
         .snapshot-back:hover { text-decoration: underline; }
 
-        /* Reuse main dashboard table styles */
         .table-wrap { overflow-x: auto; }
-
         table { width: 100%; border-collapse: collapse; font-size: 13px; }
-
-        thead th {
-            background: var(--bg);
-            padding: 10px 12px;
-            text-align: right;
-            font-weight: 600; font-size: 10px;
-            text-transform: uppercase; letter-spacing: 0.04em;
-            color: var(--text-secondary);
-            border-bottom: 1px solid var(--border);
-        }
-
+        thead th { background: var(--bg); padding: 10px 12px; text-align: right; font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary); border-bottom: 1px solid var(--border); }
         thead th:first-child { text-align: left; padding-left: 24px; }
-
-        tbody td {
-            padding: 11px 12px; text-align: right;
-            font-variant-numeric: tabular-nums;
-        }
-
+        tbody td { padding: 11px 12px; text-align: right; font-variant-numeric: tabular-nums; }
         tbody td:first-child { text-align: left; padding-left: 24px; font-weight: 600; }
-
         tbody tr:not(:last-child) td { border-bottom: 1px solid #f0f1f3; }
         tbody tr:hover { background: #f8f9fb; }
-
-        tbody tr.totals-row {
-            background: var(--bg); font-weight: 700;
-            border-top: 2px solid var(--border);
-        }
-
+        tbody tr.totals-row { background: var(--bg); font-weight: 700; border-top: 2px solid var(--border); }
         tbody tr.totals-row td { border-bottom: none; }
 
         .rate-high { color: var(--green); }
-        .rate-mid  { color: var(--teal); }
-        .rate-low  { color: var(--amber); }
-        .rate-bad  { color: var(--red); }
-        .rate-na   { color: var(--text-muted); }
+        .rate-mid { color: var(--teal); }
+        .rate-low { color: var(--amber); }
+        .rate-bad { color: var(--red); }
+        .rate-na { color: var(--text-muted); }
 
-        .loading {
-            padding: 60px 20px;
-            text-align: center;
-            color: var(--text-muted);
-        }
+        .loading { padding: 60px 20px; text-align: center; color: var(--text-muted); }
     </style>
 </head>
 <body>
@@ -218,7 +76,7 @@
         <div class="header-icon">
             <svg viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM9 10H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2z"/></svg>
         </div>
-        <h1>Daily Rep Metrics <span>— Archive</span></h1>
+        <h1>Weekly Rep Metrics <span>— Archive</span></h1>
     </div>
     <div class="header-right">
         <a href="index.html" class="back-link">← Back to Live Dashboard</a>
@@ -226,23 +84,20 @@
 </div>
 
 <div class="content">
-
-    <!-- Date list (default view) -->
-    <div id="dateListView">
+    <div id="weekListView">
         <div class="section">
-            <div class="section-header">📅 Daily Snapshots</div>
-            <div class="date-list" id="dateList">
+            <div class="section-header">📅 Weekly Snapshots</div>
+            <div id="weekList">
                 <div class="loading">Loading archives…</div>
             </div>
         </div>
     </div>
 
-    <!-- Snapshot detail view (hidden by default) -->
     <div id="snapshotView" style="display: none;">
         <div class="section">
             <div class="snapshot-header">
                 <div class="snapshot-title" id="snapshotTitle">—</div>
-                <span class="snapshot-back" id="snapshotBack">← Back to all dates</span>
+                <span class="snapshot-back" id="snapshotBack">← Back to all weeks</span>
             </div>
             <div class="table-wrap">
                 <table>
@@ -259,18 +114,14 @@
                             <th>CRM Compl.</th>
                         </tr>
                     </thead>
-                    <tbody id="snapshotBody">
-                    </tbody>
+                    <tbody id="snapshotBody"></tbody>
                 </table>
             </div>
         </div>
     </div>
-
 </div>
 
-<div class="footer">
-    Historical snapshots from the last run each day &nbsp;·&nbsp; Data from Close CRM
-</div>
+<div class="footer">Historical weekly snapshots &nbsp;·&nbsp; Data from Close CRM</div>
 
 <script>
 (function () {
@@ -280,36 +131,37 @@
         try {
             const resp = await fetch('archives/index.json?t=' + Date.now());
             const index = await resp.json();
-            renderDateList(index.dates || []);
+            renderWeekList(index.weeks || []);
         } catch (e) {
-            document.getElementById('dateList').innerHTML =
-                '<div class="empty">No archives yet — check back tomorrow.</div>';
+            document.getElementById('weekList').innerHTML =
+                '<div class="empty">No archives yet — check back next week.</div>';
         }
     }
 
-    function renderDateList(dates) {
-        const container = document.getElementById('dateList');
-        if (!dates.length) {
-            container.innerHTML = '<div class="empty">No archives yet — check back tomorrow.</div>';
+    function formatWeek(mondayStr) {
+        const mon = new Date(mondayStr + 'T12:00:00');
+        const fri = new Date(mon);
+        fri.setDate(fri.getDate() + 4);
+        const opts = { month: 'long', day: 'numeric' };
+        const monLabel = mon.toLocaleDateString('en-US', opts);
+        const friLabel = fri.toLocaleDateString('en-US', { ...opts, year: 'numeric' });
+        return `Week of ${monLabel} – ${friLabel}`;
+    }
+
+    function renderWeekList(weeks) {
+        const container = document.getElementById('weekList');
+        if (!weeks.length) {
+            container.innerHTML = '<div class="empty">No archives yet — check back next week.</div>';
             return;
         }
-
         let html = '';
-        for (const d of dates) {
-            const display = formatDate(d);
-            html += `<div class="date-item" onclick="loadSnapshot('${d}')">
-                <a href="#">${display}</a>
-                <span class="meta">${d}</span>
+        for (const w of weeks) {
+            html += `<div class="week-item" onclick="loadSnapshot('${w}')">
+                <a href="#">${formatWeek(w)}</a>
+                <span class="meta">Week of ${w}</span>
             </div>`;
         }
         container.innerHTML = html;
-    }
-
-    function formatDate(dateStr) {
-        const d = new Date(dateStr + 'T12:00:00');
-        return d.toLocaleDateString('en-US', {
-            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-        });
     }
 
     function fmtPct(v) {
@@ -331,15 +183,15 @@
         return 'rate-bad';
     }
 
-    window.loadSnapshot = async function (dateStr) {
-        document.getElementById('dateListView').style.display = 'none';
+    window.loadSnapshot = async function (mondayStr) {
+        document.getElementById('weekListView').style.display = 'none';
         document.getElementById('snapshotView').style.display = 'block';
-        document.getElementById('snapshotTitle').textContent = formatDate(dateStr);
+        document.getElementById('snapshotTitle').textContent = formatWeek(mondayStr);
         document.getElementById('snapshotBody').innerHTML =
             '<tr><td colspan="9" class="loading">Loading…</td></tr>';
 
         try {
-            const resp = await fetch(`archives/data_${dateStr}.json?t=${Date.now()}`);
+            const resp = await fetch(`archives/data_week_${mondayStr}.json?t=${Date.now()}`);
             const data = await resp.json();
             renderSnapshot(data);
         } catch (e) {
@@ -350,7 +202,6 @@
 
     function renderSnapshot(data) {
         const reps = (data.reps || []).sort((a, b) => (b.booked || 0) - (a.booked || 0));
-        const tbody = document.getElementById('snapshotBody');
         let html = '';
 
         for (const r of reps) {
@@ -379,12 +230,12 @@
             <td class="${rateClass(data.team_crm_compliance)}">${fmtPct(data.team_crm_compliance)}</td>
         </tr>`;
 
-        tbody.innerHTML = html;
+        document.getElementById('snapshotBody').innerHTML = html;
     }
 
     document.getElementById('snapshotBack').addEventListener('click', () => {
         document.getElementById('snapshotView').style.display = 'none';
-        document.getElementById('dateListView').style.display = 'block';
+        document.getElementById('weekListView').style.display = 'block';
     });
 
     loadIndex();
