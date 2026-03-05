@@ -553,12 +553,13 @@ if __name__ == "__main__":
     with open(output_path, "w") as f:
         json.dump(data, f, indent=2)
 
-    # ── Daily archive: save snapshot ─────────────────────────────────────
+    # ── Weekly archive: save snapshot keyed by Monday's date ───────────
+    # Overwrites throughout the week; last run Friday = final snapshot
     archive_dir = os.path.join(repo_root, "archives")
     os.makedirs(archive_dir, exist_ok=True)
 
-    date_str = data["today_str"]
-    archive_path = os.path.join(archive_dir, f"data_{date_str}.json")
+    monday_str = data["monday_str"]  # e.g. "2026-03-03"
+    archive_path = os.path.join(archive_dir, f"data_week_{monday_str}.json")
     with open(archive_path, "w") as f:
         json.dump(data, f, indent=2)
 
@@ -567,16 +568,16 @@ if __name__ == "__main__":
         with open(index_path, "r") as f:
             index_data = json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
-        index_data = {"dates": []}
+        index_data = {"weeks": []}
 
-    if date_str not in index_data["dates"]:
-        index_data["dates"].append(date_str)
-        index_data["dates"].sort(reverse=True)
+    if monday_str not in index_data["weeks"]:
+        index_data["weeks"].append(monday_str)
+        index_data["weeks"].sort(reverse=True)
 
     with open(index_path, "w") as f:
         json.dump(index_data, f, indent=2)
 
     print(f"✅ Wrote {output_path}", flush=True)
-    print(f"📁 Archived to {archive_path}", flush=True)
+    print(f"📁 Archived week of {monday_str} to {archive_path}", flush=True)
     print(f"   {len(data['reps'])} reps | {data['total_booked']} booked | "
           f"{data['total_deals']} deals | ${data['total_revenue']:,.2f} revenue", flush=True)
