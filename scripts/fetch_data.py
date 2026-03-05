@@ -58,12 +58,12 @@ LEAD_FIELDS = ",".join([
 
 # Weekly targets (per rep)
 WEEKLY_TARGETS = {
-    "booked": 20,
-    "shown": 15,
-    "qualified": 10,
+    "booked": 15,
+    "shown": 11,
+    "qualified": 8,
     "deals": 3,
     "revenue": 24000,
-    "close_rate": 30,
+    "close_rate": 37.5,
     "qa_score": 7,
     "avg_rev_per_deal": 8000,
     "crm_compliance": 100,
