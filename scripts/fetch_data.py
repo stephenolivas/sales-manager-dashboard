@@ -561,6 +561,31 @@ if __name__ == "__main__":
     with open(output_path, "w") as f:
         json.dump(data, f, indent=2)
 
+    # ── Daily archive: save snapshot for today ───────────────────────────
+    archive_dir = os.path.join(repo_root, "archives")
+    os.makedirs(archive_dir, exist_ok=True)
+
+    date_str = data["date_str"]  # e.g. "2026-03-04"
+    archive_path = os.path.join(archive_dir, f"data_{date_str}.json")
+    with open(archive_path, "w") as f:
+        json.dump(data, f, indent=2)
+
+    # Update archives/index.json with list of available dates
+    index_path = os.path.join(archive_dir, "index.json")
+    try:
+        with open(index_path, "r") as f:
+            index_data = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        index_data = {"dates": []}
+
+    if date_str not in index_data["dates"]:
+        index_data["dates"].append(date_str)
+        index_data["dates"].sort(reverse=True)  # newest first
+
+    with open(index_path, "w") as f:
+        json.dump(index_data, f, indent=2)
+
     print(f"✅ Wrote {output_path}", flush=True)
+    print(f"📁 Archived to {archive_path}", flush=True)
     print(f"   {len(data['reps'])} reps | {data['total_booked']} booked | "
           f"{data['total_deals']} deals | ${data['total_revenue']:,.2f} revenue", flush=True)
