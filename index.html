@@ -374,9 +374,8 @@
     function fmtAdherence(adherence, overdue) {
         if (adherence === null || adherence === undefined) return '—';
         const cls = adherence >= 90 ? 'rate-high' : adherence >= 70 ? 'rate-mid' : adherence >= 50 ? 'rate-low' : 'rate-bad';
-        const label = adherence + '%';
-        const extra = overdue > 0 ? ` <span style="font-size:10px;color:var(--red);">(${overdue} overdue)</span>` : '';
-        return `<span class="${cls}">${label}</span>${extra}`;
+        const extra = overdue > 0 ? ` <span style="font-size:10px;color:var(--red);">(${overdue})</span>` : '';
+        return `<span class="${cls}">${adherence}%</span>${extra}`;
     }
 
     function renderTable() {
