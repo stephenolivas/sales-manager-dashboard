@@ -509,15 +509,33 @@ def build_dashboard_data():
 
     reps.sort(key=lambda r: r["booked"], reverse=True)
 
-    # Team totals
-    total_booked = sum(r["booked"] for r in reps)
-    total_shown = sum(r["shown"] for r in reps)
-    total_qualified = sum(r["qualified"] for r in reps)
+    # Team totals — manager excluded from meeting/shown/qualified/CRM,
+    # but included for revenue and deals
+    non_mgr = [r for r in reps if not r["is_manager"]]
+    num_reps = len(non_mgr)
+
+    total_booked = sum(r["booked"] for r in non_mgr)
+    total_shown = sum(r["shown"] for r in non_mgr)
+    total_qualified = sum(r["qualified"] for r in non_mgr)
+    total_crm_filled = sum(r["crm_filled"] for r in non_mgr)
+    total_crm_total = sum(r["crm_total"] for r in non_mgr)
+
+    # Revenue and deals include everyone (including manager)
     total_deals = sum(r["deals"] for r in reps)
     total_revenue = sum(r["revenue"] for r in reps)
-    total_crm_filled = sum(r["crm_filled"] for r in reps)
-    total_crm_total = sum(r["crm_total"] for r in reps)
     total_avg_rev = round(total_revenue / total_deals, 2) if total_deals > 0 else None
+
+    # Team targets = individual target × number of non-manager reps
+    team_targets = {
+        "booked": WEEKLY_TARGETS["booked"] * num_reps,
+        "shown": WEEKLY_TARGETS["shown"] * num_reps,
+        "qualified": WEEKLY_TARGETS["qualified"] * num_reps,
+        "deals": WEEKLY_TARGETS["deals"] * num_reps,
+        "revenue": WEEKLY_TARGETS["revenue"] * num_reps,
+        "close_rate": WEEKLY_TARGETS["close_rate"],  # same % target
+        "avg_rev_per_deal": WEEKLY_TARGETS["avg_rev_per_deal"],  # same $ target
+        "crm_compliance": WEEKLY_TARGETS["crm_compliance"],  # same % target
+    }
 
     # Week label: "Mar 2 – Mar 7, 2026"
     mon_dt = datetime.strptime(monday_str, "%Y-%m-%d")
@@ -530,7 +548,9 @@ def build_dashboard_data():
         "monday_str": monday_str,
         "today_str": today_str,
         "day_of_week": day_of_week,
+        "num_reps": num_reps,
         "targets": WEEKLY_TARGETS,
+        "team_targets": team_targets,
         "total_booked": total_booked,
         "total_shown": total_shown,
         "total_qualified": total_qualified,
