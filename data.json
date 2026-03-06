@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-03-06 01:55 PM PST",
+  "updated_at": "2026-03-06 02:00 PM PST",
   "week_label": "Mar 02 \u2013 Mar 06, 2026",
   "monday_str": "2026-03-02",
   "today_str": "2026-03-06",
@@ -112,24 +112,6 @@
       "is_manager": false
     },
     {
-      "name": "John Kirk",
-      "booked": 14,
-      "shown": 4,
-      "qualified": 4,
-      "deals": 1,
-      "revenue": 8997.0,
-      "close_rate": 7.1,
-      "qa_score": null,
-      "avg_rev_per_deal": 8997.0,
-      "crm_compliance": 58.9,
-      "crm_filled": 33,
-      "crm_total": 56,
-      "task_adherence": 100.0,
-      "tasks_overdue": 0,
-      "tasks_incomplete": 1,
-      "is_manager": false
-    },
-    {
       "name": "Jake Skinner",
       "booked": 14,
       "shown": 7,
@@ -145,6 +127,24 @@
       "task_adherence": 100.0,
       "tasks_overdue": 0,
       "tasks_incomplete": 0,
+      "is_manager": false
+    },
+    {
+      "name": "John Kirk",
+      "booked": 14,
+      "shown": 4,
+      "qualified": 4,
+      "deals": 1,
+      "revenue": 8997.0,
+      "close_rate": 7.1,
+      "qa_score": null,
+      "avg_rev_per_deal": 8997.0,
+      "crm_compliance": 58.9,
+      "crm_filled": 33,
+      "crm_total": 56,
+      "task_adherence": 100.0,
+      "tasks_overdue": 0,
+      "tasks_incomplete": 1,
       "is_manager": false
     },
     {
@@ -167,6 +167,24 @@
     },
     {
       "name": "Ryan Jones",
+      "booked": 11,
+      "shown": 8,
+      "qualified": 7,
+      "deals": 0,
+      "revenue": 0,
+      "close_rate": 0.0,
+      "qa_score": null,
+      "avg_rev_per_deal": null,
+      "crm_compliance": 75.0,
+      "crm_filled": 33,
+      "crm_total": 44,
+      "task_adherence": 31.6,
+      "tasks_overdue": 65,
+      "tasks_incomplete": 95,
+      "is_manager": false
+    },
+    {
+      "name": "Eric Piccione",
       "booked": 11,
       "shown": 8,
       "qualified": 7,
