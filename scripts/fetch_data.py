@@ -66,7 +66,7 @@ WEEKLY_TARGETS = {
     "close_rate": 20,
     "qa_score": 7,
     "avg_rev_per_deal": 8000,
-    "crm_compliance": 100,
+    "crm_compliance": 90,
     "task_adherence": 100,
 }
 
