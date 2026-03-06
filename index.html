@@ -375,6 +375,7 @@
         const reps = [...DATA.reps];
         const { key, dir } = currentSort;
         const t = T();
+        const tt = DATA.team_targets || {};
 
         reps.sort((a, b) => {
             let va = a[key], vb = b[key];
@@ -392,33 +393,53 @@
         let html = '';
 
         for (const r of reps) {
-            const mgr = r.is_manager ? '<span class="manager-tag">MGR</span>' : '';
-            html += `<tr>
-                <td>${r.name}${mgr}</td>
-                <td class="g-activity-start">${prog(r.booked, t.booked)}</td>
-                <td>${prog(r.shown, t.shown)}</td>
-                <td>${prog(r.qualified, t.qualified)}</td>
-                <td>${prog(r.deals, t.deals)}</td>
-                <td class="g-activity-end">${progMoney(r.revenue, t.revenue)}</td>
-                <td>${progPct(r.close_rate, t.close_rate)}</td>
-                <td>${TBD}</td>
-                <td class="g-perf-end">${progMoney(r.avg_rev_per_deal, t.avg_rev_per_deal)}</td>
-                <td>${progPct(r.crm_compliance, t.crm_compliance)}</td>
-                <td>${TBD}</td>
-            </tr>`;
+            const mgr = r.is_manager;
+            const mgrTag = mgr ? '<span class="manager-tag">MGR</span>' : '';
+
+            if (mgr) {
+                // Manager: show raw numbers, no targets. Only deals + revenue matter.
+                html += `<tr>
+                    <td>${r.name}${mgrTag}</td>
+                    <td class="g-activity-start" style="color:var(--text-muted)">${r.booked}</td>
+                    <td style="color:var(--text-muted)">${r.shown}</td>
+                    <td style="color:var(--text-muted)">${r.qualified}</td>
+                    <td>${r.deals}</td>
+                    <td class="g-activity-end">${r.revenue ? fmtK(r.revenue) : '—'}</td>
+                    <td style="color:var(--text-muted)">—</td>
+                    <td>${TBD}</td>
+                    <td class="g-perf-end">${r.avg_rev_per_deal ? fmtK(r.avg_rev_per_deal) : '—'}</td>
+                    <td style="color:var(--text-muted)">—</td>
+                    <td>${TBD}</td>
+                </tr>`;
+            } else {
+                html += `<tr>
+                    <td>${r.name}${mgrTag}</td>
+                    <td class="g-activity-start">${prog(r.booked, t.booked)}</td>
+                    <td>${prog(r.shown, t.shown)}</td>
+                    <td>${prog(r.qualified, t.qualified)}</td>
+                    <td>${prog(r.deals, t.deals)}</td>
+                    <td class="g-activity-end">${progMoney(r.revenue, t.revenue)}</td>
+                    <td>${progPct(r.close_rate, t.close_rate)}</td>
+                    <td>${TBD}</td>
+                    <td class="g-perf-end">${progMoney(r.avg_rev_per_deal, t.avg_rev_per_deal)}</td>
+                    <td>${progPct(r.crm_compliance, t.crm_compliance)}</td>
+                    <td>${TBD}</td>
+                </tr>`;
+            }
         }
 
+        // Totals row with team targets
         html += `<tr class="totals-row">
-            <td>Totals</td>
-            <td class="g-activity-start">${DATA.total_booked}</td>
-            <td>${DATA.total_shown}</td>
-            <td>${DATA.total_qualified}</td>
-            <td>${DATA.total_deals}</td>
-            <td class="g-activity-end">${fmtK(DATA.total_revenue)}</td>
-            <td>${DATA.team_close_rate !== null ? DATA.team_close_rate + '%' : '—'}</td>
+            <td>Team Totals</td>
+            <td class="g-activity-start">${prog(DATA.total_booked, tt.booked)}</td>
+            <td>${prog(DATA.total_shown, tt.shown)}</td>
+            <td>${prog(DATA.total_qualified, tt.qualified)}</td>
+            <td>${prog(DATA.total_deals, tt.deals)}</td>
+            <td class="g-activity-end">${progMoney(DATA.total_revenue, tt.revenue)}</td>
+            <td>${progPct(DATA.team_close_rate, tt.close_rate)}</td>
             <td>${TBD}</td>
-            <td class="g-perf-end">${fmtK(DATA.team_avg_rev_per_deal)}</td>
-            <td>${DATA.team_crm_compliance !== null ? DATA.team_crm_compliance + '%' : '—'}</td>
+            <td class="g-perf-end">${DATA.team_avg_rev_per_deal ? fmtK(DATA.team_avg_rev_per_deal) : '—'}</td>
+            <td>${progPct(DATA.team_crm_compliance, tt.crm_compliance)}</td>
             <td>${TBD}</td>
         </tr>`;
 
