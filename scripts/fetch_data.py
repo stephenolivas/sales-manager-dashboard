@@ -409,6 +409,73 @@ def fetch_closed_won_week(monday_str, today_str):
     return [o for o in all_opps if o.get("pipeline_id") == PIPELINE_ID]
 
 
+# ── Step 5: Fetch task adherence per rep ─────────────────────────────────────
+
+def fetch_task_adherence(user_map, today_str):
+    """For each non-manager rep, fetch incomplete tasks and calculate adherence.
+
+    Adherence = % of incomplete tasks that are NOT overdue.
+    A rep with 0 incomplete tasks = 100% (fully caught up).
+    Overdue = incomplete task where date < today.
+
+    Uses GET /task/?assigned_to={user_id}&is_complete=false
+    One API call per rep (~17 calls at 0.5s = ~9 seconds).
+    """
+    rep_adherence = {}
+    rep_overdue = {}
+    rep_total_incomplete = {}
+
+    name_to_id = {v: k for k, v in user_map.items()}
+
+    for rep_name, user_id in name_to_id.items():
+        if rep_name in EXCLUDE_USERS or rep_name in MANAGER_USERS:
+            continue
+
+        try:
+            # Fetch all incomplete tasks for this rep
+            all_incomplete = []
+            skip = 0
+            while True:
+                data = api_get("/task/", {
+                    "assigned_to": user_id,
+                    "is_complete": "false",
+                    "_skip": skip,
+                    "_limit": 200,
+                })
+                tasks = data.get("data", [])
+                all_incomplete.extend(tasks)
+                if not data.get("has_more", False):
+                    break
+                skip += 200
+
+            # Count overdue (date < today) vs on-time
+            overdue = 0
+            for task in all_incomplete:
+                task_date = (task.get("date") or "")[:10]
+                if task_date and task_date < today_str:
+                    overdue += 1
+
+            total = len(all_incomplete)
+            on_time = total - overdue
+
+            rep_overdue[rep_name] = overdue
+            rep_total_incomplete[rep_name] = total
+
+            if total == 0:
+                rep_adherence[rep_name] = 100.0  # fully caught up
+            else:
+                rep_adherence[rep_name] = round(on_time / total * 100, 1)
+
+        except Exception as e:
+            print(f"    ⚠️ Failed to fetch tasks for {rep_name}: {e}", flush=True)
+
+    total_overdue = sum(rep_overdue.values())
+    total_incomplete = sum(rep_total_incomplete.values())
+    print(f"  Task adherence: {total_incomplete} incomplete tasks, {total_overdue} overdue across {len(rep_adherence)} reps", flush=True)
+
+    return rep_adherence, rep_overdue, rep_total_incomplete
+
+
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 def build_dashboard_data():
@@ -472,6 +539,10 @@ def build_dashboard_data():
         fetch_leads_for_meetings(qualifying, user_map, name_to_id)
     print(f"  Final counts by {len(rep_booked)} reps.", flush=True)
 
+    # Task adherence (per rep, excludes managers)
+    print("  Fetching task adherence per rep...", flush=True)
+    rep_adherence, rep_overdue, rep_total_incomplete = fetch_task_adherence(user_map, today_str)
+
     # Build per-rep data
     all_rep_names = set()
     all_rep_names.update(rep_revenue.keys())
@@ -489,6 +560,7 @@ def build_dashboard_data():
         crm_filled = rep_crm_filled.get(name, 0)
         crm_total = rep_crm_total.get(name, 0)
         avg_rev = round(revenue / deals, 2) if deals > 0 else None
+        is_mgr = name in MANAGER_USERS
 
         reps.append({
             "name": name,
@@ -503,8 +575,10 @@ def build_dashboard_data():
             "crm_compliance": safe_pct(crm_filled, crm_total),
             "crm_filled": crm_filled,
             "crm_total": crm_total,
-            "task_adherence": None,
-            "is_manager": name in MANAGER_USERS,
+            "task_adherence": rep_adherence.get(name) if not is_mgr else None,
+            "tasks_overdue": rep_overdue.get(name, 0) if not is_mgr else None,
+            "tasks_incomplete": rep_total_incomplete.get(name, 0) if not is_mgr else None,
+            "is_manager": is_mgr,
         })
 
     reps.sort(key=lambda r: r["booked"], reverse=True)
@@ -520,6 +594,14 @@ def build_dashboard_data():
     total_crm_filled = sum(r["crm_filled"] for r in non_mgr)
     total_crm_total = sum(r["crm_total"] for r in non_mgr)
 
+    # Task adherence totals (non-manager)
+    total_overdue = sum(r.get("tasks_overdue", 0) or 0 for r in non_mgr)
+    total_incomplete = sum(r.get("tasks_incomplete", 0) or 0 for r in non_mgr)
+    if total_incomplete == 0:
+        team_task_adherence = 100.0
+    else:
+        team_task_adherence = round((total_incomplete - total_overdue) / total_incomplete * 100, 1)
+
     # Revenue and deals include everyone (including manager)
     total_deals = sum(r["deals"] for r in reps)
     total_revenue = sum(r["revenue"] for r in reps)
@@ -532,9 +614,10 @@ def build_dashboard_data():
         "qualified": WEEKLY_TARGETS["qualified"] * num_reps,
         "deals": WEEKLY_TARGETS["deals"] * num_reps,
         "revenue": WEEKLY_TARGETS["revenue"] * num_reps,
-        "close_rate": WEEKLY_TARGETS["close_rate"],  # same % target
-        "avg_rev_per_deal": WEEKLY_TARGETS["avg_rev_per_deal"],  # same $ target
-        "crm_compliance": WEEKLY_TARGETS["crm_compliance"],  # same % target
+        "close_rate": WEEKLY_TARGETS["close_rate"],
+        "avg_rev_per_deal": WEEKLY_TARGETS["avg_rev_per_deal"],
+        "crm_compliance": WEEKLY_TARGETS["crm_compliance"],
+        "task_adherence": WEEKLY_TARGETS["task_adherence"],
     }
 
     # Week label: "Mar 2 – Mar 7, 2026"
@@ -559,6 +642,8 @@ def build_dashboard_data():
         "team_close_rate": safe_pct(total_deals, total_booked),
         "team_avg_rev_per_deal": total_avg_rev,
         "team_crm_compliance": safe_pct(total_crm_filled, total_crm_total),
+        "team_task_adherence": team_task_adherence,
+        "team_overdue": total_overdue,
         "reps": reps,
     }
 
