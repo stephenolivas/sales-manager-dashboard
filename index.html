@@ -371,6 +371,14 @@
         return '$' + Math.round(v).toLocaleString();
     }
 
+    function fmtAdherence(adherence, overdue) {
+        if (adherence === null || adherence === undefined) return '—';
+        const cls = adherence >= 90 ? 'rate-high' : adherence >= 70 ? 'rate-mid' : adherence >= 50 ? 'rate-low' : 'rate-bad';
+        const label = adherence + '%';
+        const extra = overdue > 0 ? ` <span style="font-size:10px;color:var(--red);">(${overdue} overdue)</span>` : '';
+        return `<span class="${cls}">${label}</span>${extra}`;
+    }
+
     function renderTable() {
         const reps = [...DATA.reps];
         const { key, dir } = currentSort;
@@ -397,7 +405,6 @@
             const mgrTag = mgr ? '<span class="manager-tag">MGR</span>' : '';
 
             if (mgr) {
-                // Manager: show raw numbers, no targets. Only deals + revenue matter.
                 html += `<tr>
                     <td>${r.name}${mgrTag}</td>
                     <td class="g-activity-start" style="color:var(--text-muted)">${r.booked}</td>
@@ -409,7 +416,7 @@
                     <td>${TBD}</td>
                     <td class="g-perf-end">${r.avg_rev_per_deal ? fmtK(r.avg_rev_per_deal) : '—'}</td>
                     <td style="color:var(--text-muted)">—</td>
-                    <td>${TBD}</td>
+                    <td style="color:var(--text-muted)">—</td>
                 </tr>`;
             } else {
                 html += `<tr>
@@ -423,7 +430,7 @@
                     <td>${TBD}</td>
                     <td class="g-perf-end">${progMoney(r.avg_rev_per_deal, t.avg_rev_per_deal)}</td>
                     <td>${progPct(r.crm_compliance, t.crm_compliance)}</td>
-                    <td>${TBD}</td>
+                    <td>${fmtAdherence(r.task_adherence, r.tasks_overdue)}</td>
                 </tr>`;
             }
         }
@@ -440,7 +447,7 @@
             <td>${TBD}</td>
             <td class="g-perf-end">${DATA.team_avg_rev_per_deal ? fmtK(DATA.team_avg_rev_per_deal) : '—'}</td>
             <td>${progPct(DATA.team_crm_compliance, tt.crm_compliance)}</td>
-            <td>${TBD}</td>
+            <td>${fmtAdherence(DATA.team_task_adherence, DATA.team_overdue)}</td>
         </tr>`;
 
         document.getElementById('tableBody').innerHTML = html;
