@@ -63,7 +63,7 @@ WEEKLY_TARGETS = {
     "qualified": 8,
     "deals": 3,
     "revenue": 24000,
-    "close_rate": 37.5,
+    "close_rate": 20,
     "qa_score": 7,
     "avg_rev_per_deal": 8000,
     "crm_compliance": 100,
