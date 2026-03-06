@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-03-06 02:45 PM PST",
+  "updated_at": "2026-03-06 03:00 PM PST",
   "week_label": "Mar 02 \u2013 Mar 06, 2026",
   "monday_str": "2026-03-02",
   "today_str": "2026-03-06",
@@ -35,9 +35,9 @@
   "total_revenue": 166040.0,
   "team_close_rate": 9.8,
   "team_avg_rev_per_deal": 8302.0,
-  "team_crm_compliance": 67.6,
-  "team_task_adherence": 54.1,
-  "team_overdue": 402,
+  "team_crm_compliance": 67.9,
+  "team_task_adherence": 54.2,
+  "team_overdue": 400,
   "reps": [
     {
       "name": "Chris Wanke",
@@ -76,24 +76,6 @@
       "is_manager": false
     },
     {
-      "name": "Christian Hartwell",
-      "booked": 17,
-      "shown": 12,
-      "qualified": 11,
-      "deals": 2,
-      "revenue": 19094.0,
-      "close_rate": 11.8,
-      "qa_score": null,
-      "avg_rev_per_deal": 9547.0,
-      "crm_compliance": 83.8,
-      "crm_filled": 57,
-      "crm_total": 68,
-      "task_adherence": 100.0,
-      "tasks_overdue": 0,
-      "tasks_incomplete": 7,
-      "is_manager": false
-    },
-    {
       "name": "Scott Seymour",
       "booked": 17,
       "shown": 11,
@@ -109,6 +91,24 @@
       "task_adherence": 100.0,
       "tasks_overdue": 0,
       "tasks_incomplete": 66,
+      "is_manager": false
+    },
+    {
+      "name": "Christian Hartwell",
+      "booked": 17,
+      "shown": 12,
+      "qualified": 11,
+      "deals": 2,
+      "revenue": 19094.0,
+      "close_rate": 11.8,
+      "qa_score": null,
+      "avg_rev_per_deal": 9547.0,
+      "crm_compliance": 83.8,
+      "crm_filled": 57,
+      "crm_total": 68,
+      "task_adherence": 100.0,
+      "tasks_overdue": 0,
+      "tasks_incomplete": 7,
       "is_manager": false
     },
     {
@@ -166,6 +166,24 @@
       "is_manager": false
     },
     {
+      "name": "Ryan Jones",
+      "booked": 11,
+      "shown": 8,
+      "qualified": 7,
+      "deals": 0,
+      "revenue": 0,
+      "close_rate": 0.0,
+      "qa_score": null,
+      "avg_rev_per_deal": null,
+      "crm_compliance": 75.0,
+      "crm_filled": 33,
+      "crm_total": 44,
+      "task_adherence": 31.6,
+      "tasks_overdue": 65,
+      "tasks_incomplete": 95,
+      "is_manager": false
+    },
+    {
       "name": "Eric Piccione",
       "booked": 11,
       "shown": 8,
@@ -184,6 +202,24 @@
       "is_manager": false
     },
     {
+      "name": "Vince Bartolini",
+      "booked": 11,
+      "shown": 3,
+      "qualified": 3,
+      "deals": 0,
+      "revenue": 0,
+      "close_rate": 0.0,
+      "qa_score": null,
+      "avg_rev_per_deal": null,
+      "crm_compliance": 65.9,
+      "crm_filled": 29,
+      "crm_total": 44,
+      "task_adherence": 100.0,
+      "tasks_overdue": 0,
+      "tasks_incomplete": 19,
+      "is_manager": false
+    },
+    {
       "name": "Andrea Shoop",
       "booked": 11,
       "shown": 5,
@@ -199,42 +235,6 @@
       "task_adherence": 100.0,
       "tasks_overdue": 0,
       "tasks_incomplete": 1,
-      "is_manager": false
-    },
-    {
-      "name": "Vince Bartolini",
-      "booked": 11,
-      "shown": 3,
-      "qualified": 3,
-      "deals": 0,
-      "revenue": 0,
-      "close_rate": 0.0,
-      "qa_score": null,
-      "avg_rev_per_deal": null,
-      "crm_compliance": 61.4,
-      "crm_filled": 27,
-      "crm_total": 44,
-      "task_adherence": 100.0,
-      "tasks_overdue": 0,
-      "tasks_incomplete": 19,
-      "is_manager": false
-    },
-    {
-      "name": "Ryan Jones",
-      "booked": 11,
-      "shown": 8,
-      "qualified": 7,
-      "deals": 0,
-      "revenue": 0,
-      "close_rate": 0.0,
-      "qa_score": null,
-      "avg_rev_per_deal": null,
-      "crm_compliance": 75.0,
-      "crm_filled": 33,
-      "crm_total": 44,
-      "task_adherence": 31.6,
-      "tasks_overdue": 65,
-      "tasks_incomplete": 95,
       "is_manager": false
     },
     {
@@ -310,6 +310,24 @@
       "is_manager": false
     },
     {
+      "name": "Jordan Humphrey",
+      "booked": 6,
+      "shown": 5,
+      "qualified": 4,
+      "deals": 0,
+      "revenue": 0,
+      "close_rate": 0.0,
+      "qa_score": null,
+      "avg_rev_per_deal": null,
+      "crm_compliance": 83.3,
+      "crm_filled": 20,
+      "crm_total": 24,
+      "task_adherence": 100.0,
+      "tasks_overdue": 0,
+      "tasks_incomplete": 121,
+      "is_manager": false
+    },
+    {
       "name": "Julia Scaroni",
       "booked": 6,
       "shown": 3,
@@ -325,24 +343,6 @@
       "task_adherence": 100.0,
       "tasks_overdue": 0,
       "tasks_incomplete": 1,
-      "is_manager": false
-    },
-    {
-      "name": "Jordan Humphrey",
-      "booked": 6,
-      "shown": 5,
-      "qualified": 4,
-      "deals": 0,
-      "revenue": 0,
-      "close_rate": 0.0,
-      "qa_score": null,
-      "avg_rev_per_deal": null,
-      "crm_compliance": 83.3,
-      "crm_filled": 20,
-      "crm_total": 24,
-      "task_adherence": 98.4,
-      "tasks_overdue": 2,
-      "tasks_incomplete": 122,
       "is_manager": false
     },
     {
