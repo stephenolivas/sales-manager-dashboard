@@ -1,9 +1,6 @@
 name: Update Rep Metrics Dashboard
 
 on:
-  schedule:
-    - cron: '*/15 14-23 * * 1-5'
-    - cron: '*/15 0-2 * * 2-6'
   workflow_dispatch:
 
 permissions:
@@ -35,5 +32,5 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data.json archives/
           git diff --staged --quiet || git commit -m "📊 Update dashboard data - $(date -u +'%Y-%m-%d %H:%M UTC')"
-          git pull --rebase origin main
+          git pull --rebase -X theirs origin main || true
           git push
