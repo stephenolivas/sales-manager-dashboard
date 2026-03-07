@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-03-07 03:00 PM PST",
+  "updated_at": "2026-03-07 03:15 PM PST",
   "week_label": "Mar 02 \u2013 Mar 06, 2026",
   "monday_str": "2026-03-02",
   "today_str": "2026-03-07",
@@ -166,6 +166,24 @@
       "is_manager": false
     },
     {
+      "name": "Eric Piccione",
+      "booked": 11,
+      "shown": 8,
+      "qualified": 7,
+      "deals": 2,
+      "revenue": 18497.0,
+      "close_rate": 18.2,
+      "qa_score": null,
+      "avg_rev_per_deal": 9248.5,
+      "crm_compliance": 81.8,
+      "crm_filled": 36,
+      "crm_total": 44,
+      "task_adherence": 100.0,
+      "tasks_overdue": 0,
+      "tasks_incomplete": 1,
+      "is_manager": false
+    },
+    {
       "name": "Ryan Jones",
       "booked": 11,
       "shown": 8,
@@ -199,24 +217,6 @@
       "task_adherence": 100.0,
       "tasks_overdue": 0,
       "tasks_incomplete": 19,
-      "is_manager": false
-    },
-    {
-      "name": "Eric Piccione",
-      "booked": 11,
-      "shown": 8,
-      "qualified": 7,
-      "deals": 2,
-      "revenue": 18497.0,
-      "close_rate": 18.2,
-      "qa_score": null,
-      "avg_rev_per_deal": 9248.5,
-      "crm_compliance": 81.8,
-      "crm_filled": 36,
-      "crm_total": 44,
-      "task_adherence": 100.0,
-      "tasks_overdue": 0,
-      "tasks_incomplete": 1,
       "is_manager": false
     },
     {
