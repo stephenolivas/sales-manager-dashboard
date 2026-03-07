@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-03-07 03:45 AM PST",
+  "updated_at": "2026-03-07 04:00 AM PST",
   "week_label": "Mar 02 \u2013 Mar 06, 2026",
   "monday_str": "2026-03-02",
   "today_str": "2026-03-07",
@@ -40,24 +40,6 @@
   "team_overdue": 447,
   "reps": [
     {
-      "name": "Robin Perkins",
-      "booked": 21,
-      "shown": 14,
-      "qualified": 10,
-      "deals": 6,
-      "revenue": 49982.0,
-      "close_rate": 28.6,
-      "qa_score": null,
-      "avg_rev_per_deal": 8330.33,
-      "crm_compliance": 79.8,
-      "crm_filled": 67,
-      "crm_total": 84,
-      "task_adherence": 91.4,
-      "tasks_overdue": 3,
-      "tasks_incomplete": 35,
-      "is_manager": false
-    },
-    {
       "name": "Chris Wanke",
       "booked": 21,
       "shown": 12,
@@ -73,6 +55,24 @@
       "task_adherence": 0.0,
       "tasks_overdue": 6,
       "tasks_incomplete": 6,
+      "is_manager": false
+    },
+    {
+      "name": "Robin Perkins",
+      "booked": 21,
+      "shown": 14,
+      "qualified": 10,
+      "deals": 6,
+      "revenue": 49982.0,
+      "close_rate": 28.6,
+      "qa_score": null,
+      "avg_rev_per_deal": 8330.33,
+      "crm_compliance": 79.8,
+      "crm_filled": 67,
+      "crm_total": 84,
+      "task_adherence": 91.4,
+      "tasks_overdue": 3,
+      "tasks_incomplete": 35,
       "is_manager": false
     },
     {
