@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-03-06 10:15 PM PST",
+  "updated_at": "2026-03-06 10:30 PM PST",
   "week_label": "Mar 02 \u2013 Mar 06, 2026",
   "monday_str": "2026-03-02",
   "today_str": "2026-03-06",
@@ -76,24 +76,6 @@
       "is_manager": false
     },
     {
-      "name": "Scott Seymour",
-      "booked": 17,
-      "shown": 11,
-      "qualified": 13,
-      "deals": 3,
-      "revenue": 28991.0,
-      "close_rate": 17.6,
-      "qa_score": null,
-      "avg_rev_per_deal": 9663.67,
-      "crm_compliance": 82.4,
-      "crm_filled": 56,
-      "crm_total": 68,
-      "task_adherence": 100.0,
-      "tasks_overdue": 0,
-      "tasks_incomplete": 67,
-      "is_manager": false
-    },
-    {
       "name": "Christian Hartwell",
       "booked": 17,
       "shown": 12,
@@ -109,6 +91,24 @@
       "task_adherence": 100.0,
       "tasks_overdue": 0,
       "tasks_incomplete": 7,
+      "is_manager": false
+    },
+    {
+      "name": "Scott Seymour",
+      "booked": 17,
+      "shown": 11,
+      "qualified": 13,
+      "deals": 3,
+      "revenue": 28991.0,
+      "close_rate": 17.6,
+      "qa_score": null,
+      "avg_rev_per_deal": 9663.67,
+      "crm_compliance": 82.4,
+      "crm_filled": 56,
+      "crm_total": 68,
+      "task_adherence": 100.0,
+      "tasks_overdue": 0,
+      "tasks_incomplete": 67,
       "is_manager": false
     },
     {
@@ -274,24 +274,6 @@
       "is_manager": false
     },
     {
-      "name": "William Chase",
-      "booked": 7,
-      "shown": 4,
-      "qualified": 4,
-      "deals": 0,
-      "revenue": 0,
-      "close_rate": 0.0,
-      "qa_score": null,
-      "avg_rev_per_deal": null,
-      "crm_compliance": 67.9,
-      "crm_filled": 19,
-      "crm_total": 28,
-      "task_adherence": 10.3,
-      "tasks_overdue": 174,
-      "tasks_incomplete": 194,
-      "is_manager": false
-    },
-    {
       "name": "Lyle Hubbard",
       "booked": 7,
       "shown": 3,
@@ -310,21 +292,21 @@
       "is_manager": false
     },
     {
-      "name": "Julia Scaroni",
-      "booked": 6,
-      "shown": 3,
-      "qualified": 1,
+      "name": "William Chase",
+      "booked": 7,
+      "shown": 4,
+      "qualified": 4,
       "deals": 0,
       "revenue": 0,
       "close_rate": 0.0,
       "qa_score": null,
       "avg_rev_per_deal": null,
-      "crm_compliance": 54.2,
-      "crm_filled": 13,
-      "crm_total": 24,
-      "task_adherence": 100.0,
-      "tasks_overdue": 0,
-      "tasks_incomplete": 1,
+      "crm_compliance": 67.9,
+      "crm_filled": 19,
+      "crm_total": 28,
+      "task_adherence": 10.3,
+      "tasks_overdue": 174,
+      "tasks_incomplete": 194,
       "is_manager": false
     },
     {
@@ -343,6 +325,24 @@
       "task_adherence": 100.0,
       "tasks_overdue": 0,
       "tasks_incomplete": 122,
+      "is_manager": false
+    },
+    {
+      "name": "Julia Scaroni",
+      "booked": 6,
+      "shown": 3,
+      "qualified": 1,
+      "deals": 0,
+      "revenue": 0,
+      "close_rate": 0.0,
+      "qa_score": null,
+      "avg_rev_per_deal": null,
+      "crm_compliance": 54.2,
+      "crm_filled": 13,
+      "crm_total": 24,
+      "task_adherence": 100.0,
+      "tasks_overdue": 0,
+      "tasks_incomplete": 1,
       "is_manager": false
     },
     {
