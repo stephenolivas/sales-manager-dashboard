@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-03-07 11:15 AM PST",
+  "updated_at": "2026-03-07 11:30 AM PST",
   "week_label": "Mar 02 \u2013 Mar 06, 2026",
   "monday_str": "2026-03-02",
   "today_str": "2026-03-07",
@@ -184,6 +184,24 @@
       "is_manager": false
     },
     {
+      "name": "Andrea Shoop",
+      "booked": 11,
+      "shown": 5,
+      "qualified": 3,
+      "deals": 0,
+      "revenue": 0,
+      "close_rate": 0.0,
+      "qa_score": null,
+      "avg_rev_per_deal": null,
+      "crm_compliance": 84.1,
+      "crm_filled": 37,
+      "crm_total": 44,
+      "task_adherence": 100.0,
+      "tasks_overdue": 0,
+      "tasks_incomplete": 1,
+      "is_manager": false
+    },
+    {
       "name": "Ryan Jones",
       "booked": 11,
       "shown": 8,
@@ -217,24 +235,6 @@
       "task_adherence": 100.0,
       "tasks_overdue": 0,
       "tasks_incomplete": 19,
-      "is_manager": false
-    },
-    {
-      "name": "Andrea Shoop",
-      "booked": 11,
-      "shown": 5,
-      "qualified": 3,
-      "deals": 0,
-      "revenue": 0,
-      "close_rate": 0.0,
-      "qa_score": null,
-      "avg_rev_per_deal": null,
-      "crm_compliance": 84.1,
-      "crm_filled": 37,
-      "crm_total": 44,
-      "task_adherence": 100.0,
-      "tasks_overdue": 0,
-      "tasks_incomplete": 1,
       "is_manager": false
     },
     {
@@ -310,24 +310,6 @@
       "is_manager": false
     },
     {
-      "name": "Jordan Humphrey",
-      "booked": 6,
-      "shown": 5,
-      "qualified": 4,
-      "deals": 0,
-      "revenue": 0,
-      "close_rate": 0.0,
-      "qa_score": null,
-      "avg_rev_per_deal": null,
-      "crm_compliance": 79.2,
-      "crm_filled": 19,
-      "crm_total": 24,
-      "task_adherence": 99.2,
-      "tasks_overdue": 1,
-      "tasks_incomplete": 122,
-      "is_manager": false
-    },
-    {
       "name": "Julia Scaroni",
       "booked": 6,
       "shown": 3,
@@ -343,6 +325,24 @@
       "task_adherence": 100.0,
       "tasks_overdue": 0,
       "tasks_incomplete": 1,
+      "is_manager": false
+    },
+    {
+      "name": "Jordan Humphrey",
+      "booked": 6,
+      "shown": 5,
+      "qualified": 4,
+      "deals": 0,
+      "revenue": 0,
+      "close_rate": 0.0,
+      "qa_score": null,
+      "avg_rev_per_deal": null,
+      "crm_compliance": 79.2,
+      "crm_filled": 19,
+      "crm_total": 24,
+      "task_adherence": 99.2,
+      "tasks_overdue": 1,
+      "tasks_incomplete": 122,
       "is_manager": false
     },
     {
