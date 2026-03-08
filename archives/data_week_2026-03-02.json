@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-03-07 04:00 PM PST",
+  "updated_at": "2026-03-07 04:15 PM PST",
   "week_label": "Mar 02 \u2013 Mar 06, 2026",
   "monday_str": "2026-03-02",
   "today_str": "2026-03-07",
@@ -112,24 +112,6 @@
       "is_manager": false
     },
     {
-      "name": "John Kirk",
-      "booked": 14,
-      "shown": 5,
-      "qualified": 5,
-      "deals": 1,
-      "revenue": 8997.0,
-      "close_rate": 7.1,
-      "qa_score": null,
-      "avg_rev_per_deal": 8997.0,
-      "crm_compliance": 69.6,
-      "crm_filled": 39,
-      "crm_total": 56,
-      "task_adherence": 100.0,
-      "tasks_overdue": 0,
-      "tasks_incomplete": 1,
-      "is_manager": false
-    },
-    {
       "name": "Jake Skinner",
       "booked": 14,
       "shown": 7,
@@ -145,6 +127,24 @@
       "task_adherence": 100.0,
       "tasks_overdue": 0,
       "tasks_incomplete": 0,
+      "is_manager": false
+    },
+    {
+      "name": "John Kirk",
+      "booked": 14,
+      "shown": 5,
+      "qualified": 5,
+      "deals": 1,
+      "revenue": 8997.0,
+      "close_rate": 7.1,
+      "qa_score": null,
+      "avg_rev_per_deal": 8997.0,
+      "crm_compliance": 69.6,
+      "crm_filled": 39,
+      "crm_total": 56,
+      "task_adherence": 100.0,
+      "tasks_overdue": 0,
+      "tasks_incomplete": 1,
       "is_manager": false
     },
     {
@@ -202,24 +202,6 @@
       "is_manager": false
     },
     {
-      "name": "Vince Bartolini",
-      "booked": 11,
-      "shown": 3,
-      "qualified": 3,
-      "deals": 0,
-      "revenue": 0,
-      "close_rate": 0.0,
-      "qa_score": null,
-      "avg_rev_per_deal": null,
-      "crm_compliance": 72.7,
-      "crm_filled": 32,
-      "crm_total": 44,
-      "task_adherence": 100.0,
-      "tasks_overdue": 0,
-      "tasks_incomplete": 19,
-      "is_manager": false
-    },
-    {
       "name": "Andrea Shoop",
       "booked": 11,
       "shown": 5,
@@ -235,6 +217,24 @@
       "task_adherence": 100.0,
       "tasks_overdue": 0,
       "tasks_incomplete": 1,
+      "is_manager": false
+    },
+    {
+      "name": "Vince Bartolini",
+      "booked": 11,
+      "shown": 3,
+      "qualified": 3,
+      "deals": 0,
+      "revenue": 0,
+      "close_rate": 0.0,
+      "qa_score": null,
+      "avg_rev_per_deal": null,
+      "crm_compliance": 72.7,
+      "crm_filled": 32,
+      "crm_total": 44,
+      "task_adherence": 100.0,
+      "tasks_overdue": 0,
+      "tasks_incomplete": 19,
       "is_manager": false
     },
     {
